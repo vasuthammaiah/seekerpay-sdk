@@ -1,60 +1,123 @@
+/// seekerpay_domains — example app.
+///
+/// Demonstrates .skr and .sol domain resolution, autocomplete search,
+/// and Seeker Genesis Token verification.
+library;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:seekerpay_domains/seekerpay_domains.dart';
-import 'package:seekerpay_core/seekerpay_core.dart';
 
 void main() {
-  runApp(const MaterialApp(home: DomainExample()));
+  runApp(const ProviderScope(child: _App()));
 }
 
-class DomainExample extends StatefulWidget {
-  const DomainExample({super.key});
-
+class _App extends StatelessWidget {
+  const _App();
   @override
-  State<DomainExample> createState() => _DomainExampleState();
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'seekerpay_domains example',
+        theme: ThemeData.dark(),
+        home: const _HomeScreen(),
+      );
 }
 
-class _DomainExampleState extends State<DomainExample> {
-  final _rpc = RpcClient(rpcUrl: 'https://api.mainnet-beta.solana.com');
-  late final SnsResolver _resolver;
-  final _controller = TextEditingController(text: 'solana.sol');
-  String _address = 'Not resolved';
-  bool _isLoading = false;
-
+class _HomeScreen extends ConsumerStatefulWidget {
+  const _HomeScreen();
   @override
-  void initState() {
-    super.initState();
-    _resolver = SnsResolver(_rpc);
-  }
+  ConsumerState<_HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<_HomeScreen> {
+  final _controller = TextEditingController(text: 'bob.skr');
+  String? _resolvedAddress;
+  bool? _isVerified;
+  bool _loading = false;
+  String? _error;
 
   Future<void> _resolve() async {
-    setState(() => _isLoading = true);
+    final query = _controller.text.trim();
+    if (query.isEmpty) return;
+
+    setState(() { _loading = true; _error = null; _resolvedAddress = null; _isVerified = null; });
+
     try {
-      final addr = await _resolver.resolve(_controller.text);
-      setState(() => _address = addr ?? 'Not found');
+      final resolver = ref.read(snsResolverProvider);
+      final address = await resolver.resolve(query);
+      if (!mounted) return;
+
+      if (address == null) {
+        setState(() { _error = '$query not found'; _loading = false; });
+        return;
+      }
+
+      // Also check Seeker Genesis Token for this address
+      final verified = await ref.read(isAddressVerifiedProvider(address).future);
+      if (!mounted) return;
+
+      setState(() {
+        _resolvedAddress = address;
+        _isVerified = verified;
+        _loading = false;
+      });
     } catch (e) {
-      setState(() => _address = 'Error: $e');
-    } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('SeekerPay Domain Example')),
+      appBar: AppBar(title: const Text('seekerpay_domains')),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(controller: _controller, decoration: const InputDecoration(labelText: 'Enter Domain (.sol or .skr)')),
+            TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                labelText: 'Enter domain (.skr or .sol)',
+                hintText: 'e.g. alice.skr or solana.sol',
+                border: OutlineInputBorder(),
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _resolve(),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loading ? null : _resolve,
+              child: _loading
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Resolve'),
+            ),
             const SizedBox(height: 24),
-            _isLoading 
-              ? const CircularProgressIndicator()
-              : ElevatedButton(onPressed: _resolve, child: const Text('Resolve Domain')),
-            const SizedBox(height: 48),
-            const Text('Resolved Address:', style: TextStyle(fontSize: 16)),
-            const SizedBox(height: 8),
-            SelectableText(_address, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Courier')),
+            if (_error != null)
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            if (_resolvedAddress != null) ...[
+              const Text('Resolved address:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              const SizedBox(height: 4),
+              SelectableText(
+                _resolvedAddress!,
+                style: const TextStyle(fontFamily: 'Courier', fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Icon(
+                  _isVerified == true ? Icons.verified_rounded : Icons.shield_outlined,
+                  size: 16,
+                  color: _isVerified == true ? Colors.green : Colors.white38,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _isVerified == true ? 'Seeker Verified' : 'Not Seeker Verified',
+                  style: TextStyle(
+                    color: _isVerified == true ? Colors.green : Colors.white38,
+                    fontSize: 13,
+                  ),
+                ),
+              ]),
+            ],
           ],
         ),
       ),
