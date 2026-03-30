@@ -1,6 +1,6 @@
 name: seekerpay_split
 description: Social payments and group splits for SeekerPay.
-version: 1.0.6
+version: 1.0.7
 topics:
   - solana
   - payments
@@ -17,7 +17,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  seekerpay_core: ^1.0.6
+  seekerpay_core: ^1.0.7
   flutter_riverpod: ^2.5.1
   shared_preferences: ^2.2.3
 

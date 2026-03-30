@@ -1,3 +1,9 @@
+## 1.0.7
+
+* Add `getToken22BalanceByMint` RPC method: checks a wallet's Token-2022 token balance by mint using the Token-2022 program directly, no Helius key required.
+* Add `hasToken22InGroup` RPC method: inspects Token-2022 mint account extensions (groupMember / groupMemberPointer) and mint authority to verify collection membership without Helius.
+* Fix `getAssetsByOwner`: add `page: 1` parameter for reliable Helius DAS pagination.
+
 ## 1.0.6
 
 * Fix received SKR activities not showing: sort merged signatures by blockTime before applying the 20-tx limit so receives are not pushed out by sends.

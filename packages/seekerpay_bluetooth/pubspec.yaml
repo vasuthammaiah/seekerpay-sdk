@@ -1,6 +1,6 @@
 name: seekerpay_bluetooth
 description: Bluetooth and Nearby Connections for SeekerPay.
-version: 1.0.6
+version: 1.0.7
 topics:
   - solana
   - payments
@@ -20,7 +20,7 @@ dependencies:
   flutter_riverpod: ^2.5.1
   nearby_connections: ^4.3.0
   permission_handler: ^11.3.1
-  seekerpay_core: ^1.0.6
+  seekerpay_core: ^1.0.7
 
 dev_dependencies:
   flutter_test:
