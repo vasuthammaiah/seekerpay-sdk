@@ -89,7 +89,7 @@ class MwaClient {
   /// Re-uses an existing auth token when available; falls back to a fresh
   /// [authorize] call otherwise.
   Future<String?> connectWalletAndGetAddress({
-    String identityName = 'SeekerPay',
+    String identityName = 'seekerpay',
     String cluster = 'mainnet-beta',
   }) async {
     if (!Platform.isAndroid) return null;
@@ -101,15 +101,19 @@ class MwaClient {
       ctx = await _openClient();
       final client = ctx.client;
 
+      final identityUri = Uri.parse('https://seekerpay.live');
+
       AuthorizationResult? nextAuth;
       final currentAuth = _auth;
       if (currentAuth != null) {
         nextAuth = await client.reauthorize(
+          identityUri: identityUri,
           identityName: identityName,
           authToken: currentAuth.authToken,
         );
       }
       nextAuth ??= await client.authorize(
+        identityUri: identityUri,
         identityName: identityName,
         cluster: cluster,
       );
@@ -135,7 +139,7 @@ class MwaClient {
   /// Requires Android. A fresh authorization is performed if no token is cached.
   Future<Uint8List?> signTransaction({
     required Uint8List transactionBytes,
-    String identityName = 'SeekerPay',
+    String identityName = 'seekerpay',
     String cluster = 'mainnet-beta',
   }) async {
     if (!Platform.isAndroid || _busy) return null;
@@ -146,14 +150,18 @@ class MwaClient {
       ctx = await _openClient();
       final client = ctx.client;
 
+      final identityUri = Uri.parse('https://seekerpay.live');
+
       AuthorizationResult? auth = _auth;
       if (auth != null) {
         auth = await client.reauthorize(
+          identityUri: identityUri,
           identityName: identityName,
           authToken: auth.authToken,
         );
       }
       auth ??= await client.authorize(
+        identityUri: identityUri,
         identityName: identityName,
         cluster: cluster,
       );

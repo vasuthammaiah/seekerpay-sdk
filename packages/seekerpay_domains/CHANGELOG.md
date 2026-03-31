@@ -1,3 +1,7 @@
+## 1.0.9
+
+* Bump seekerpay_core dependency to ^1.0.9 (MWA identity fix: wallet now shows "Seeker Pay" with bitcoinvision.ai domain).
+
 ## 1.0.7
 
 * Fix Seeker Genesis Token verification: each Seeker device has a unique per-device mint, so SGT ownership is now verified against the official collection group address (`GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te`) instead of a single hardcoded mint address.

@@ -1,3 +1,15 @@
+## 1.1.0
+
+* Update MWA identity to `seekerpay` app name and `seekerpay.live` domain.
+
+## 1.0.9
+
+* Update MWA identity URI to `bitcoinvision.ai`; wallet now shows "Seeker Pay" as app name with correct domain.
+
+## 1.0.8
+
+* Fix sign transaction showing "unknown app": pass `identityUri` to MWA `authorize`/`reauthorize` calls so wallets correctly display "Seeker Pay" as the app name.
+
 ## 1.0.7
 
 * Add `getToken22BalanceByMint` RPC method: checks a wallet's Token-2022 token balance by mint using the Token-2022 program directly, no Helius key required.

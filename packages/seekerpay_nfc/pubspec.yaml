@@ -1,6 +1,6 @@
 name: seekerpay_nfc
 description: Seeker-native NFC tap-to-pay for SeekerPay.
-version: 1.0.7
+version: 1.0.9
 topics:
   - solana
   - payments

@@ -1,6 +1,6 @@
 name: seekerpay_domains
 description: SNS domain resolution and Seeker identity for SeekerPay.
-version: 1.0.7
+version: 1.0.9
 topics:
   - solana
   - domains

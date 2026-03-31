@@ -1,3 +1,7 @@
+## 1.0.9
+
+* Bump seekerpay_core dependency to ^1.0.9 (MWA identity fix: wallet now shows "Seeker Pay" with bitcoinvision.ai domain).
+
 ## 1.0.7
 
 * Bump seekerpay_core to ^1.0.7.

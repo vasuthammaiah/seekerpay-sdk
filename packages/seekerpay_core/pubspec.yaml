@@ -1,6 +1,6 @@
 name: seekerpay_core
 description: Core payment logic for SeekerPay on Solana Seeker.
-version: 1.0.7
+version: 1.1.0
 topics:
   - solana
   - payments

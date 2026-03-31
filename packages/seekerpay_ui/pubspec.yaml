@@ -1,6 +1,6 @@
 name: seekerpay_ui
 description: Reusable UI components for SeekerPay payments.
-version: 1.0.7
+version: 1.0.9
 topics:
   - solana
   - payments

@@ -1,6 +1,6 @@
 name: seekerpay_qr
 description: QR code generation and scanning for SeekerPay.
-version: 1.0.7
+version: 1.0.9
 topics:
   - solana
   - payments

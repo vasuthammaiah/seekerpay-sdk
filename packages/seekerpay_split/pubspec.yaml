@@ -1,6 +1,6 @@
 name: seekerpay_split
 description: Social payments and group splits for SeekerPay.
-version: 1.0.7
+version: 1.0.9
 topics:
   - solana
   - payments
