@@ -126,14 +126,22 @@ class MwaClient {
       AuthorizationResult? nextAuth;
       final currentAuth = _auth;
       if (currentAuth != null) {
-        nextAuth = await client.reauthorize(
-          identityUri: _identityUri,
-          identityName: _identityName,
-          authToken: currentAuth.authToken,
-        );
+        try {
+          nextAuth = await client.reauthorize(
+            identityUri: _identityUri,
+            identityName: _identityName,
+            authToken: currentAuth.authToken,
+          );
+        } catch (_) {
+          // Auth token stale or unsupported by this wallet — fall through to
+          // a fresh authorize() below.
+          nextAuth = null;
+          _auth = null;
+        }
       }
       nextAuth ??= await client.authorize(
         identityUri: _identityUri,
+        iconUri: Uri.parse('${_identityUri}favicon.png'),
         identityName: _identityName,
         cluster: cluster,
       );
@@ -171,26 +179,48 @@ class MwaClient {
 
       AuthorizationResult? auth = _auth;
       if (auth != null) {
-        auth = await client.reauthorize(
-          identityUri: _identityUri,
-          identityName: _identityName,
-          authToken: auth.authToken,
-        );
+        try {
+          auth = await client.reauthorize(
+            identityUri: _identityUri,
+            identityName: _identityName,
+            authToken: auth.authToken,
+          );
+        } catch (_) {
+          // Auth token stale or not recognised by this wallet (common with
+          // external wallets like Jupiter that don't persist tokens across
+          // LocalAssociationScenario sessions).  Fall through to a fresh
+          // authorize() so the user gets a proper sign dialog instead of a
+          // confusing rejection.
+          auth = null;
+          _auth = null;
+        }
       }
       auth ??= await client.authorize(
         identityUri: _identityUri,
+        iconUri: Uri.parse('${_identityUri}favicon.png'),
         identityName: _identityName,
         cluster: cluster,
       );
-      if (auth == null) return null;
+      if (auth == null) throw MwaUserRejectedException();
       _auth = auth;
 
       final signed =
           await client.signTransactions(transactions: [transactionBytes]);
-      if (signed.signedPayloads.isEmpty) return null;
+      if (signed.signedPayloads.isEmpty) throw MwaUserRejectedException();
 
       return signed.signedPayloads.first;
-    } catch (_) {
+    } on MwaException {
+      rethrow;
+    } catch (e) {
+      // Map native SDK rejection messages to a typed exception so callers
+      // can distinguish a user cancellation from a connectivity error.
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('user declined') ||
+          msg.contains('user rejected') ||
+          msg.contains('authorization not granted') ||
+          msg.contains('not authorized')) {
+        throw MwaUserRejectedException();
+      }
       rethrow;
     } finally {
       _busy = false;

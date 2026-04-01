@@ -203,7 +203,7 @@ class PaymentService extends StateNotifier<PaymentState> {
 
       state = state.copyWith(status: PaymentStatus.signing);
       final signed = await _mwaClient.signTransaction(transactionBytes: txBytes);
-      if (signed == null) throw Exception('Signing rejected');
+      if (signed == null) throw MwaUserRejectedException();
 
       // Use web3.base58Encode to convert the first signature (Uint8List) to string
       final signature = web3.base58Encode(web3.Transaction.deserialize(signed).signatures.first);
