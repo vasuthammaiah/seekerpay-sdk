@@ -10,8 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   qr_flutter: ^4.1.0
-  seekerpay_core: ^1.0.0
-  seekerpay_qr: ^1.0.0
+  seekerpay_core:
+    path: ../../seekerpay_core
+  seekerpay_qr:
+    path: ..
 
 dev_dependencies:
   flutter_test:

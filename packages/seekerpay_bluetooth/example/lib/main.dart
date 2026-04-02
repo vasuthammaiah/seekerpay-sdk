@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:seekerpay_bluetooth/seekerpay_bluetooth.dart';
 import 'package:seekerpay_core/seekerpay_core.dart';
 import 'package:seekerpay_qr/seekerpay_qr.dart';

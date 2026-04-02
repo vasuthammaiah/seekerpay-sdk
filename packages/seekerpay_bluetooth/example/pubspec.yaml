@@ -9,10 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_riverpod: ^2.5.1
-  seekerpay_bluetooth: ^1.0.0
-  seekerpay_core: ^1.0.0
-  seekerpay_qr: ^1.0.0
+  flutter_riverpod: ^3.3.1
+  seekerpay_bluetooth:
+    path: ..
+  seekerpay_core:
+    path: ../../seekerpay_core
+  seekerpay_qr:
+    path: ../../seekerpay_qr
 
 dev_dependencies:
   flutter_test:

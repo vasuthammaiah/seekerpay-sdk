@@ -21,7 +21,7 @@ class PaymentPreviewSheet extends StatefulWidget {
 }
 
 class _PaymentPreviewSheetState extends State<PaymentPreviewSheet> {
-  bool _offlineReady = false;
+  bool _offlineReady = false; bool _isConfirming = false;
 
   @override
   Widget build(BuildContext context) {
@@ -87,11 +87,11 @@ class _PaymentPreviewSheetState extends State<PaymentPreviewSheet> {
           ),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () { 
+            onPressed: _isConfirming ? null : () { setState(() => _isConfirming = true); 
               Navigator.pop(context); 
               widget.onConfirm(_offlineReady); 
             }, 
-            child: Text(_offlineReady ? 'Sign & Queue (Offline)' : 'Confirm & Sign'),
+            child: _isConfirming ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(_offlineReady ? 'Sign & Queue (Offline)' : 'Confirm & Sign'),
           ),
         ],
       ),

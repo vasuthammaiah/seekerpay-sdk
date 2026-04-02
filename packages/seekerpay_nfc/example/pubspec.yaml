@@ -9,7 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  seekerpay_nfc: ^1.0.0
+  seekerpay_nfc:
+    path: ..
 
 dev_dependencies:
   flutter_test:

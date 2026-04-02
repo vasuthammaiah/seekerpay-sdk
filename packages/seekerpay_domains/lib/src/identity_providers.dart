@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:seekerpay_core/seekerpay_core.dart';
 import 'genesis_checker.dart';
 import 'sns_resolver.dart';

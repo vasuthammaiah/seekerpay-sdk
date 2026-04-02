@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show VoidCallback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:solana_web3/solana_web3.dart' as web3;
 import 'dart:convert';
 import 'rpc_client.dart';
@@ -145,7 +146,7 @@ class PaymentService extends StateNotifier<PaymentState> {
         if (currentBalance < totalAmount) {
           throw Exception('insufficient balance: You have ${(currentBalance.toDouble() / 1000000).toStringAsFixed(2)} SKR but need ${(totalAmount.toDouble() / 1000000).toStringAsFixed(2)} SKR');
         }
-      } catch (e) {
+      } catch (e, st) { print('PaymentService Error: $e'); print(st);
         if (!offlineReady) rethrow;
         // If offlineReady, we continue anyway and let simulation or signing proceed
       }
@@ -203,7 +204,7 @@ class PaymentService extends StateNotifier<PaymentState> {
 
       state = state.copyWith(status: PaymentStatus.signing);
       final signed = await _mwaClient.signTransaction(transactionBytes: txBytes);
-      if (signed == null) throw MwaUserRejectedException();
+      if (signed == null) { print('PaymentService: MWA returned null signed transaction'); throw Exception('User rejected the request'); }
 
       // Use web3.base58Encode to convert the first signature (Uint8List) to string
       final signature = web3.base58Encode(web3.Transaction.deserialize(signed).signatures.first);
@@ -234,7 +235,7 @@ class PaymentService extends StateNotifier<PaymentState> {
       state = state.copyWith(status: PaymentStatus.success);
       onSuccess?.call();
       return signature;
-    } catch (e) {
+    } catch (e, st) { print('PaymentService Error: $e'); print(st);
       state = state.copyWith(status: PaymentStatus.failed, error: e.toString());
       return null;
     }
@@ -262,7 +263,7 @@ class PaymentService extends StateNotifier<PaymentState> {
         print('SeekerPay: Successfully submitted pending tx ${tx.signature}');
         await _pendingManager.remove(tx.signature);
         anyChange = true;
-      } catch (e) {
+      } catch (e, st) { print('PaymentService Error: $e'); print(st);
         final errorStr = e.toString();
         print('SeekerPay: Failed to submit pending tx ${tx.signature}: $errorStr');
         
