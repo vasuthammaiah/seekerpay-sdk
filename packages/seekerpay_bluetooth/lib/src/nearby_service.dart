@@ -67,6 +67,7 @@ class NearbyService extends StateNotifier<NearbyState> {
   /// Nearby Connections topology used for all sessions.
   final Strategy strategy = Strategy.P2P_CLUSTER;
   String? _currentPayload;
+  void Function()? _onUrlSent;
 
   NearbyService() : super(NearbyState());
 
@@ -106,11 +107,12 @@ class NearbyService extends StateNotifier<NearbyState> {
 
   /// Begins advertising this device as [userName] and prepares [solanaPayUrl]
   /// to be sent automatically when a peer connects.
-  Future<void> startAdvertising(String userName, String solanaPayUrl) async {
+  Future<void> startAdvertising(String userName, String solanaPayUrl, {void Function()? onUrlSent}) async {
     // Ensure all endpoints are stopped before starting a new session
     await Nearby().stopAllEndpoints();
     
     _currentPayload = solanaPayUrl;
+    _onUrlSent = onUrlSent;
     state = state.copyWith(status: NearbyStatus.advertising, discoveredDevices: []);
 
     try {
@@ -174,7 +176,8 @@ class NearbyService extends StateNotifier<NearbyState> {
   }
 
   /// Stops all advertising, discovery, and endpoint connections, and resets state.
-  void stopAll() async {
+  Future<void> stopAll() async {
+    _onUrlSent = null;
     await Nearby().stopAdvertising();
     await Nearby().stopDiscovery();
     await Nearby().stopAllEndpoints();
@@ -225,6 +228,7 @@ class NearbyService extends StateNotifier<NearbyState> {
   void _sendUrl(String endpointId) {
     if (_currentPayload != null) {
       Nearby().sendBytesPayload(endpointId, Uint8List.fromList(_currentPayload!.codeUnits));
+      _onUrlSent?.call();
     }
   }
 }

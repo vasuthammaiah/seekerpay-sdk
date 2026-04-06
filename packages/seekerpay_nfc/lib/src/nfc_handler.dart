@@ -10,6 +10,7 @@ class NfcHandler {
   void Function(String url)? _onTagRead;
   void Function()? _onTagWritten;
   void Function(String error)? _onTagWriteError;
+  void Function()? _onHceTap;
 
   void _ensureHandler() {
     if (_handlerSet) return;
@@ -28,6 +29,9 @@ class NfcHandler {
           final handler = _onTagWriteError;
           if (handler != null) handler(call.arguments as String);
           break;
+        case 'onHceTap':
+          _onHceTap?.call();
+          break;
       }
     });
   }
@@ -38,7 +42,13 @@ class NfcHandler {
     on PlatformException { return false; }
   }
   /// Writes [solanaPayUrl] to an NFC tag using the native `writeTag` method.
-  Future<void> writePaymentTag(String solanaPayUrl) async => _ch.invokeMethod('writeTag', {'url': solanaPayUrl});
+  /// When [onHceTap] is provided it is called each time a remote device
+  /// completes an HCE exchange (i.e. a sender tapped and retrieved the URL).
+  Future<void> writePaymentTag(String solanaPayUrl, {void Function()? onHceTap}) async {
+    _ensureHandler();
+    _onHceTap = onHceTap;
+    return _ch.invokeMethod('writeTag', {'url': solanaPayUrl});
+  }
   /// Writes [solanaPayUrl] as an NDEF record, with optional callbacks for
   /// success ([onTagWritten]) and failure ([onTagWriteError]).
   Future<void> writeNdefTag({
