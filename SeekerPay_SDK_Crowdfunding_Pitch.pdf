@@ -1,0 +1,299 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 2730 >>
+stream
+BT
+/F2 24 Tf
+1 0 0 1 54 732 Tm
+(SeekerPay SDK) Tj
+/F2 15 Tf
+1 0 0 1 54 688 Tm
+(Crowdfunding Pitch) Tj
+/F1 11 Tf
+1 0 0 1 54 652 Tm
+(SeekerPay SDK is an open-source Flutter SDK for building SKR payment experiences on Solana Seeker. It is) Tj
+/F1 11 Tf
+1 0 0 1 54 636 Tm
+(designed for developers who want production-ready building blocks for QR payments, NFC tap-to-pay,) Tj
+/F1 11 Tf
+1 0 0 1 54 620 Tm
+(Bluetooth proximity payments, split bills, domain resolution, and Seeker-native payment flows.) Tj
+/F1 11 Tf
+1 0 0 1 54 590 Tm
+(This is not a concept. The SDK is already built from a working SeekerPay product and extracted into) Tj
+/F1 11 Tf
+1 0 0 1 54 574 Tm
+(reusable packages. Crowdfunding will help complete the next stage: stronger documentation, more sample) Tj
+/F1 11 Tf
+1 0 0 1 54 558 Tm
+(apps, feature expansion, and ongoing maintenance.) Tj
+/F1 11 Tf
+1 0 0 1 54 528 Tm
+(The SeekerPay app is already available on the Solana dApp Store under DeFi & Trading, and this SDK is the) Tj
+/F1 11 Tf
+1 0 0 1 54 512 Tm
+(open-source developer layer extracted from that real app experience.) Tj
+/F2 15 Tf
+1 0 0 1 54 482 Tm
+(Why Back SeekerPay SDK) Tj
+/F1 11 Tf
+1 0 0 1 54 446 Tm
+(Most developers do not want to rebuild wallet signing, Solana payment flows, domain resolution, QR) Tj
+/F1 11 Tf
+1 0 0 1 54 430 Tm
+(handling, or split-bill logic from scratch. SeekerPay SDK reduces that work and gives Flutter developers) Tj
+/F1 11 Tf
+1 0 0 1 54 414 Tm
+(a faster path to shipping SKR-native apps on Seeker.) Tj
+/F1 11 Tf
+1 0 0 1 54 384 Tm
+(By backing this project, supporters help create shared infrastructure for the Seeker ecosystem instead of) Tj
+/F1 11 Tf
+1 0 0 1 54 368 Tm
+(a single closed product.) Tj
+/F2 15 Tf
+1 0 0 1 54 338 Tm
+(What Is Already Built) Tj
+/F1 11 Tf
+1 0 0 1 54 302 Tm
+(The SDK already includes working package foundations for:) Tj
+/F1 11 Tf
+1 0 0 1 54 272 Tm
+(- `seekerpay_core` for RPC access, wallet connection, SKR payments, balances, activity, and pending) Tj
+/F1 11 Tf
+1 0 0 1 54 256 Tm
+(  transactions) Tj
+/F1 11 Tf
+1 0 0 1 54 236 Tm
+(- `seekerpay_qr` for Solana Pay URL encoding and QR payment flows) Tj
+/F1 11 Tf
+1 0 0 1 54 216 Tm
+(- `seekerpay_nfc` for NFC payment handoff integration) Tj
+/F1 11 Tf
+1 0 0 1 54 196 Tm
+(- `seekerpay_bluetooth` for nearby device-to-device payment handoff) Tj
+/F1 11 Tf
+1 0 0 1 54 176 Tm
+(- `seekerpay_split` for split bills and payment tracking) Tj
+/F1 11 Tf
+1 0 0 1 54 156 Tm
+(- `seekerpay_domains` for `.skr` and `.sol` resolution plus identity checks) Tj
+/F1 11 Tf
+1 0 0 1 54 136 Tm
+(- `seekerpay_ui` for reusable SeekerPay UI components) Tj
+/F2 15 Tf
+1 0 0 1 54 106 Tm
+(Already Created Features) Tj
+/F1 11 Tf
+1 0 0 1 54 70 Tm
+(- SKR payment flow for Flutter apps) Tj
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 9 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Length 2367 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 54 732 Tm
+(- Wallet signing integration for Seeker-native payment flows) Tj
+/F1 11 Tf
+1 0 0 1 54 712 Tm
+(- QR payment request generation and decoding) Tj
+/F1 11 Tf
+1 0 0 1 54 692 Tm
+(- NFC payment handoff support) Tj
+/F1 11 Tf
+1 0 0 1 54 672 Tm
+(- Bluetooth nearby payment handoff support) Tj
+/F1 11 Tf
+1 0 0 1 54 652 Tm
+(- Split bill creation and payment verification) Tj
+/F1 11 Tf
+1 0 0 1 54 632 Tm
+(- `.skr` and `.sol` domain resolution) Tj
+/F1 11 Tf
+1 0 0 1 54 612 Tm
+(- Seeker identity verification support) Tj
+/F1 11 Tf
+1 0 0 1 54 592 Tm
+(- Reusable payment UI components) Tj
+/F1 11 Tf
+1 0 0 1 54 572 Tm
+(- Example apps for key SDK flows) Tj
+/F2 15 Tf
+1 0 0 1 54 542 Tm
+(What Crowdfunding Will Fund Next) Tj
+/F1 11 Tf
+1 0 0 1 54 506 Tm
+(The next phase is about turning the SDK from a strong working base into a polished developer platform.) Tj
+/F2 15 Tf
+1 0 0 1 54 476 Tm
+(New Features Planned) Tj
+/F1 11 Tf
+1 0 0 1 54 440 Tm
+(- better SDK documentation and integration guides) Tj
+/F1 11 Tf
+1 0 0 1 54 420 Tm
+(- more complete sample apps for merchant, checkout, split-bill, and directory use cases) Tj
+/F1 11 Tf
+1 0 0 1 54 400 Tm
+(- cleaner high-level APIs for common payment actions) Tj
+/F1 11 Tf
+1 0 0 1 54 380 Tm
+(- stronger offline and pending-transaction workflows) Tj
+/F1 11 Tf
+1 0 0 1 54 360 Tm
+(- richer QR and payment request utilities) Tj
+/F1 11 Tf
+1 0 0 1 54 340 Tm
+(- improved NFC and nearby payment abstractions) Tj
+/F1 11 Tf
+1 0 0 1 54 320 Tm
+(- expanded domain directory and identity tooling) Tj
+/F1 11 Tf
+1 0 0 1 54 300 Tm
+(- stronger chat and payment-request interoperability where relevant) Tj
+/F1 11 Tf
+1 0 0 1 54 280 Tm
+(- better test coverage and release quality across packages) Tj
+/F1 11 Tf
+1 0 0 1 54 260 Tm
+(- pub.dev and GitHub release polish for broader adoption) Tj
+/F2 15 Tf
+1 0 0 1 54 230 Tm
+(Maintenance Commitment) Tj
+/F1 11 Tf
+1 0 0 1 54 194 Tm
+(Part of the crowdfunding support will go toward long-term SDK maintenance, including:) Tj
+/F1 11 Tf
+1 0 0 1 54 164 Tm
+(- Flutter and Dart compatibility updates) Tj
+/F1 11 Tf
+1 0 0 1 54 144 Tm
+(- dependency upgrades) Tj
+/F1 11 Tf
+1 0 0 1 54 124 Tm
+(- bug fixes across packages) Tj
+/F1 11 Tf
+1 0 0 1 54 104 Tm
+(- issue triage and developer support) Tj
+/F1 11 Tf
+1 0 0 1 54 84 Tm
+(- example app upkeep) Tj
+/F1 11 Tf
+1 0 0 1 54 64 Tm
+(- documentation updates) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 9 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 1742 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 54 732 Tm
+(- API stability improvements) Tj
+/F1 11 Tf
+1 0 0 1 54 712 Tm
+(- adjustments for Solana, wallet, or mobile platform changes) Tj
+/F2 15 Tf
+1 0 0 1 54 682 Tm
+(Who This Is For) Tj
+/F1 11 Tf
+1 0 0 1 54 646 Tm
+(SeekerPay SDK is for:) Tj
+/F1 11 Tf
+1 0 0 1 54 616 Tm
+(- Flutter developers building on Solana Seeker) Tj
+/F1 11 Tf
+1 0 0 1 54 596 Tm
+(- teams that want SKR payments without rebuilding the full stack) Tj
+/F1 11 Tf
+1 0 0 1 54 576 Tm
+(- merchant and checkout app builders) Tj
+/F1 11 Tf
+1 0 0 1 54 556 Tm
+(- wallet-adjacent apps that need payment requests and transfer flows) Tj
+/F1 11 Tf
+1 0 0 1 54 536 Tm
+(- developers who want open-source Seeker-native payment infrastructure) Tj
+/F2 15 Tf
+1 0 0 1 54 506 Tm
+(Funding Outcome) Tj
+/F1 11 Tf
+1 0 0 1 54 470 Tm
+(If this campaign succeeds, the result will be a more complete, better documented, better maintained open-) Tj
+/F1 11 Tf
+1 0 0 1 54 454 Tm
+(source SDK that helps more developers launch SKR-native apps faster.) Tj
+/F1 11 Tf
+1 0 0 1 54 424 Tm
+(The goal is simple: make SeekerPay SDK the default Flutter toolkit for SKR payments on Solana Seeker.) Tj
+/F2 15 Tf
+1 0 0 1 54 394 Tm
+(Founder) Tj
+/F1 11 Tf
+1 0 0 1 54 358 Tm
+(**Vasu Thammaiah**) Tj
+/F1 11 Tf
+1 0 0 1 54 338 Tm
+(Founder and Developer) Tj
+/F1 11 Tf
+1 0 0 1 54 318 Tm
+(bitcoinvisionai@gmail.com) Tj
+/F2 15 Tf
+1 0 0 1 54 288 Tm
+(Closing Pitch) Tj
+/F1 11 Tf
+1 0 0 1 54 252 Tm
+(SeekerPay SDK already exists as a real working foundation. Crowdfunding will help turn it into a stronger) Tj
+/F1 11 Tf
+1 0 0 1 54 236 Tm
+(ecosystem tool with better features, better docs, and reliable maintenance for the developers building) Tj
+/F1 11 Tf
+1 0 0 1 54 220 Tm
+(the next generation of Seeker apps.) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 9 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Type /Pages /Kids [ 4 0 R 6 0 R 8 0 R ] /Count 3 >>
+endobj
+10 0 obj
+<< /Type /Catalog /Pages 9 0 R >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000002942 00000 n 
+0000003078 00000 n 
+0000005497 00000 n 
+0000005633 00000 n 
+0000007427 00000 n 
+0000007563 00000 n 
+0000007634 00000 n 
+trailer
+<< /Size 11 /Root 10 0 R >>
+startxref
+7684
+%%EOF
