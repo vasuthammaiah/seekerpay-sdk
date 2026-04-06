@@ -5,7 +5,7 @@ import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Lifecycle states for a Nearby Connections session.
-enum NearbyStatus { idle, advertising, discovering, connecting, connected, error }
+enum NearbyStatus { idle, advertising, discovering, connecting, connected, error, deniedPermissions, locationDisabled }
 
 /// Represents a Nearby Connections peer discovered during discovery.
 class NearbyDevice {
@@ -86,34 +86,31 @@ class NearbyService extends StateNotifier<NearbyState> {
     
     // Check if location service is enabled
     bool locationEnabled = await Permission.location.serviceStatus.isEnabled;
-    state = state.copyWith(isLocationEnabled: locationEnabled);
+    state = state.copyWith(
+      isLocationEnabled: locationEnabled,
+      status: !allGranted ? NearbyStatus.deniedPermissions : (locationEnabled ? state.status : NearbyStatus.locationDisabled),
+    );
     
     return allGranted && locationEnabled;
   }
 
   /// Requests Nearby Connections runtime permissions without returning a result.
   Future<void> askPermissions() async {
-    await [
-      Permission.bluetoothScan,
-      Permission.bluetoothAdvertise,
-      Permission.bluetoothConnect,
-      Permission.location,
-      Permission.nearbyWifiDevices,
-    ].request();
-    
-    bool locationEnabled = await Permission.location.serviceStatus.isEnabled;
-    state = state.copyWith(isLocationEnabled: locationEnabled);
+    await checkPermissions();
   }
 
   /// Begins advertising this device as [userName] and prepares [solanaPayUrl]
   /// to be sent automatically when a peer connects.
   Future<void> startAdvertising(String userName, String solanaPayUrl, {void Function()? onUrlSent}) async {
+    // Ensure permissions before starting
+    if (!await checkPermissions()) return;
+
     // Ensure all endpoints are stopped before starting a new session
     await Nearby().stopAllEndpoints();
     
     _currentPayload = solanaPayUrl;
     _onUrlSent = onUrlSent;
-    state = state.copyWith(status: NearbyStatus.advertising, discoveredDevices: []);
+    state = state.copyWith(status: NearbyStatus.advertising, discoveredDevices: [], error: null);
 
     try {
       bool running = await Nearby().startAdvertising(
@@ -143,10 +140,13 @@ class NearbyService extends StateNotifier<NearbyState> {
   /// Starts scanning for nearby advertisers as [userName].
   /// Discovered peers are added to [NearbyState.discoveredDevices].
   Future<void> startDiscovery(String userName) async {
+    // Ensure permissions before starting
+    if (!await checkPermissions()) return;
+
     // Ensure all endpoints are stopped before starting a new session
     await Nearby().stopAllEndpoints();
     
-    state = state.copyWith(status: NearbyStatus.discovering, discoveredDevices: [], receivedUrl: null);
+    state = state.copyWith(status: NearbyStatus.discovering, discoveredDevices: [], receivedUrl: null, error: null);
 
     try {
       bool running = await Nearby().startDiscovery(

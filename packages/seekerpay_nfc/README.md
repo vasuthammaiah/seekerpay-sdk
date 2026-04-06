@@ -19,7 +19,7 @@ NFC tap-to-pay for the SeekerPay SDK. Writes Solana Pay URLs to NFC tags and rea
 
 ```yaml
 dependencies:
-  seekerpay_nfc: ^1.2.0
+  seekerpay_nfc: ^1.3.0
 ```
 
 ### Android setup
@@ -60,6 +60,14 @@ await nfc.startReading(
 );
 ```
 
+### Read a single tag (helper)
+
+```dart
+// Waits for a single tag to be read, then stops scanning automatically
+final url = await nfc.readTag();
+print('Received: $url');
+```
+
 ### Write a payment tag
 
 ```dart
@@ -73,6 +81,10 @@ final url = SolanaPayUrl(
   label: 'Pay me 1 SKR',
 ).encode();
 
+// Helper for single tag write
+await nfc.writeTagOnce(url);
+
+// Or with more control:
 await nfc.writeNdefTag(
   solanaPayUrl: url,
   onTagWritten: () => print('Tag written successfully'),
@@ -95,9 +107,11 @@ final nfc = ref.read(nfcHandlerProvider);
 |--------|-------------|
 | `isAvailable()` | Returns `true` if the device has NFC hardware |
 | `startReading({onTagRead})` | Begin scanning; callback fires for each scanned tag |
+| `readTag()` | Wait for a single tag to be read and return its URL |
 | `stopReading()` | Stop the active NFC scan session |
 | `writePaymentTag(url)` | Write a Solana Pay URL to a tag (fire-and-forget) |
 | `writeNdefTag({url, onTagWritten, onTagWriteError})` | Write with completion/error callbacks |
+| `writeTagOnce(url)` | Wait for a single tag and write to it |
 | `openSettings()` | Open device NFC settings |
 
 ---

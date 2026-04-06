@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 
 /// Bridge to the native NFC implementation via the `seekerpay/nfc` [MethodChannel].
@@ -68,8 +69,38 @@ class NfcHandler {
     _onTagRead = onTagRead;
     return _ch.invokeMethod('startRead');
   }
+
+  /// Helper that waits for a single NFC tag to be read and returns its URL.
+  /// Stops reading automatically once a tag is found.
+  Future<String> readTag() async {
+    final completer = Completer<String>();
+    await startReading(onTagRead: (url) {
+      if (!completer.isCompleted) {
+        stopReading();
+        completer.complete(url);
+      }
+    });
+    return completer.future;
+  }
+
   /// Stops the active NFC tag reading session.
   Future<void> stopReading() => _ch.invokeMethod('stopRead');
+
+  /// Helper that waits for a single NFC tag, writes [solanaPayUrl] to it,
+  /// and returns when finished.
+  Future<void> writeTagOnce(String solanaPayUrl) async {
+    final completer = Completer<void>();
+    await writeNdefTag(
+      solanaPayUrl: solanaPayUrl,
+      onTagWritten: () {
+        if (!completer.isCompleted) completer.complete();
+      },
+      onTagWriteError: (e) {
+        if (!completer.isCompleted) completer.completeError(e);
+      },
+    );
+    return completer.future;
+  }
 
   /// Opens the device NFC settings page.
   Future<void> openSettings() => _ch.invokeMethod('openSettings');

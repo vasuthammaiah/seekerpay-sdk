@@ -1,3 +1,9 @@
+## 1.3.0
+
+* Add `readTag()` helper that returns a `Future<String>` for single-tag reading.
+* Add `writeTagOnce()` helper that returns a `Future<void>` for single-tag writing.
+* Use `dart:async` Completers for a more idiomatic Dart API.
+
 ## 1.2.0
 
 * Feature updates and internal improvements for the 1.2.0 release.

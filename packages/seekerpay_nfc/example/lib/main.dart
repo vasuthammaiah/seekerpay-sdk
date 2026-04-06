@@ -47,17 +47,21 @@ class _HomeScreenState extends State<_HomeScreen> {
       _scannedUrl = null;
       _status = 'Hold phone near NFC tag or device…';
     });
-    await _nfc.startReading(
-      onTagRead: (url) {
-        if (!mounted) return;
-        setState(() {
-          _scannedUrl = url;
-          _scanning = false;
-          _status = 'Tag read successfully';
-        });
-        _nfc.stopReading();
-      },
-    );
+    try {
+      final url = await _nfc.readTag();
+      if (!mounted) return;
+      setState(() {
+        _scannedUrl = url;
+        _scanning = false;
+        _status = 'Tag read successfully';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _scanning = false;
+        _status = 'Read error: $e';
+      });
+    }
   }
 
   Future<void> _stopRead() async {

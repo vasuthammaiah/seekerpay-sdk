@@ -21,7 +21,7 @@ P2P payment handoff for the SeekerPay SDK using Google Nearby Connections. Enabl
 
 ```yaml
 dependencies:
-  seekerpay_bluetooth: ^1.2.0
+  seekerpay_bluetooth: ^1.3.0
 ```
 
 ### Android setup
@@ -49,21 +49,15 @@ import 'package:seekerpay_core/seekerpay_core.dart';
 
 final nearby = ref.read(nearbyServiceProvider.notifier);
 
-// 1. Request permissions
-final granted = await nearby.checkPermissions();
-if (!granted) {
-  await nearby.askPermissions();
-  return;
-}
-
-// 2. Build the Solana Pay URL
+// 1. Build the Solana Pay URL
 final url = SolanaPayUrl(
   recipient: myWalletAddress,
   amount: BigInt.from(2_000_000), // 2.00 SKR
   splToken: SKRToken.mintAddress,
 ).encode();
 
-// 3. Start advertising — other devices will discover this device
+// 2. Start advertising — permissions are checked automatically
+// other devices will discover this device
 await nearby.startAdvertising('Alice', url);
 ```
 
@@ -71,9 +65,9 @@ await nearby.startAdvertising('Alice', url);
 
 ```dart
 final nearby = ref.read(nearbyServiceProvider.notifier);
-await nearby.checkPermissions();
 
-// Start discovery — NearbyState.discoveredDevices updates reactively
+// Start discovery — permissions are checked automatically
+// NearbyState.discoveredDevices updates reactively
 await nearby.startDiscovery('Bob');
 
 // Watch discovered devices
@@ -106,7 +100,7 @@ nearby.stopAll();
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | `NearbyStatus` | `idle`, `advertising`, `discovering`, `connecting`, `connected`, `error` |
+| `status` | `NearbyStatus` | `idle`, `advertising`, `discovering`, `connecting`, `connected`, `error`, `deniedPermissions`, `locationDisabled` |
 | `discoveredDevices` | `List<NearbyDevice>` | Devices found during discovery |
 | `receivedUrl` | `String?` | Solana Pay URL received from connected device |
 | `error` | `String?` | Error message if status is `error` |

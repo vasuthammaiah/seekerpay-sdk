@@ -1,3 +1,10 @@
+## 1.3.0
+
+* Add `deniedPermissions` and `locationDisabled` statuses to `NearbyStatus`.
+* Automatically check/request permissions in `startAdvertising` and `startDiscovery`.
+* Reset error state on each new operation.
+* Better internal state management for permission changes.
+
 ## 1.2.0
 
 * Feature updates and internal improvements for the 1.2.0 release.

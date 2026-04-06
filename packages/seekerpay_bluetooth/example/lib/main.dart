@@ -154,5 +154,7 @@ class _HomeScreen extends ConsumerWidget {
         NearbyStatus.connecting => Colors.amber,
         NearbyStatus.connected => Colors.green,
         NearbyStatus.error => Colors.red,
+        NearbyStatus.deniedPermissions => Colors.redAccent,
+        NearbyStatus.locationDisabled => Colors.orangeAccent,
       };
 }
