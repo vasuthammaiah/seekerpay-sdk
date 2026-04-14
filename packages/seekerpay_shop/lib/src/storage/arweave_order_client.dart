@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// A lightweight record returned by [ArweaveOrderClient.queryOrders].
@@ -38,12 +39,11 @@ class ArweaveOrderClient {
   }) async {
     const query = r'''
       query($tags: [TagFilter!]!, $first: Int!) {
-        transactions(tags: $tags, first: $first, sort: HEIGHT_DESC) {
+        transactions(tags: $tags, first: $first) {
           edges {
             node {
               id
               tags { name value }
-              block { timestamp }
             }
           }
         }
@@ -60,6 +60,9 @@ class ArweaveOrderClient {
       ],
     };
 
+    debugPrint('[SKR-Arweave/Client] queryOrders: POST $_graphqlUrl  ownerHash=$ownerHash  limit=$limit');
+    debugPrint('[SKR-Arweave/Client] queryOrders: variables=${jsonEncode(variables)}');
+
     final response = await http
         .post(
           Uri.parse(_graphqlUrl),
@@ -68,14 +71,20 @@ class ArweaveOrderClient {
         )
         .timeout(const Duration(seconds: 15));
 
+    debugPrint('[SKR-Arweave/Client] queryOrders: response status=${response.statusCode}  bodyLength=${response.body.length}');
+
     if (response.statusCode != 200) {
+      debugPrint('[SKR-Arweave/Client] queryOrders: ❌ HTTP ${response.statusCode}  body=${response.body}');
       throw ArweaveOrderQueryException(
           'GraphQL query failed: ${response.statusCode}');
     }
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final edges =
-        (body['data']?['transactions']?['edges'] as List?) ?? [];
+    if (body['errors'] != null) {
+      debugPrint('[SKR-Arweave/Client] queryOrders: ❌ GraphQL errors=${body['errors']}');
+    }
+    final edges = (body['data']?['transactions']?['edges'] as List?) ?? [];
+    debugPrint('[SKR-Arweave/Client] queryOrders: found ${edges.length} edges in response');
 
     final records = <ArweaveOrderRecord>[];
     for (final edge in edges) {
@@ -86,12 +95,13 @@ class ArweaveOrderClient {
         for (final t in tagList)
           (t['name'] as String): (t['value'] as String),
       };
+      debugPrint('[SKR-Arweave/Client] queryOrders: edge txId=$txId  orderId=${tags["Order-Id"]}');
       records.add(ArweaveOrderRecord(
         txId: txId,
         tags: tags,
-        blockTimestamp: node['block']?['timestamp'] as int?,
       ));
     }
+    debugPrint('[SKR-Arweave/Client] queryOrders: returning ${records.length} records');
     return records;
   }
 
@@ -105,20 +115,27 @@ class ArweaveOrderClient {
       '$_arweaveGatewayUrl/$txId',
     ];
 
+    debugPrint('[SKR-Arweave/Client] fetchContent: txId=$txId  trying ${urls.length} gateways');
     Object? lastError;
     for (final url in urls) {
+      debugPrint('[SKR-Arweave/Client] fetchContent: GET $url');
       try {
         final response = await http
             .get(Uri.parse(url))
             .timeout(const Duration(seconds: 15));
+        debugPrint('[SKR-Arweave/Client] fetchContent: status=${response.statusCode}  bytes=${response.bodyBytes.length}');
         if (response.statusCode == 200) {
+          debugPrint('[SKR-Arweave/Client] fetchContent: ✅ got ${response.bodyBytes.length} bytes from $url');
           return response.bodyBytes;
         }
-        lastError = 'HTTP ${response.statusCode} from $url';
+        lastError = 'HTTP ${response.statusCode} from $url  body=${response.body.substring(0, response.body.length.clamp(0, 200))}';
+        debugPrint('[SKR-Arweave/Client] fetchContent: ❌ $lastError');
       } catch (e) {
         lastError = e;
+        debugPrint('[SKR-Arweave/Client] fetchContent: ❌ exception from $url  error=$e');
       }
     }
+    debugPrint('[SKR-Arweave/Client] fetchContent: ❌ all gateways failed for txId=$txId  lastError=$lastError');
     throw ArweaveOrderQueryException(
         'Content fetch failed for $txId: $lastError');
   }

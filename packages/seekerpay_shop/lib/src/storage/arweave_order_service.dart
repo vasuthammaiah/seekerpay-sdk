@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as pkg_crypto;
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../order_model.dart';
@@ -76,13 +77,11 @@ class ArweaveOrderService {
   /// that connects the same wallet — enabling full backup recovery.
   static Future<ArweaveOrderService> init({required String walletAddress}) async {
     assert(walletAddress.isNotEmpty, 'walletAddress must not be empty');
+    debugPrint('[SKR-Arweave] init — deriving enc key for wallet …${walletAddress.substring(walletAddress.length - 6)}');
 
     final irys = await IrysClient.init();
     final arweave = ArweaveOrderClient();
 
-    // Derive a 32-byte AES-256 key from the wallet address.
-    // Using wallet address as key material means any reinstall with the same
-    // wallet can decrypt its backups without storing any secret locally.
     final keyMaterial = utf8.encode('$walletAddress:$_hkdfInfo');
     final keyHash = pkg_crypto.sha256.convert(keyMaterial).bytes;
     final encKey = await _hkdf.deriveKey(
@@ -90,6 +89,7 @@ class ArweaveOrderService {
       info: utf8.encode(_hkdfInfo),
     );
 
+    debugPrint('[SKR-Arweave] init done — IrysClient + ArweaveOrderClient ready');
     return ArweaveOrderService._(irys, arweave, encKey);
   }
 
@@ -101,9 +101,12 @@ class ArweaveOrderService {
   ///
   /// Throws [IrysUploadException] on upload failure.
   Future<String> saveOrder(Order order, String walletAddress) async {
+    debugPrint('[SKR-Arweave] saveOrder: orderId=${order.id}  items=${order.items.length}  totalUsd=${order.totalUsd}');
     final ownerHash = hashAddress(walletAddress);
     final plaintext = utf8.encode(jsonEncode(order.toJson()));
+    debugPrint('[SKR-Arweave] saveOrder: plaintext size=${plaintext.length} bytes');
     final cipherBytes = await _encrypt(plaintext);
+    debugPrint('[SKR-Arweave] saveOrder: encrypted size=${cipherBytes.length} bytes');
 
     final tags = [
       IrysTag('App-Name', _appName),
@@ -113,7 +116,9 @@ class ArweaveOrderService {
       IrysTag('Order-Id', order.id),
     ];
 
+    debugPrint('[SKR-Arweave] saveOrder: uploading to Irys with tags=${tags.map((t) => "${t.name}=${t.value}").toList()}');
     final txId = await _irys.upload(cipherBytes, tags);
+    debugPrint('[SKR-Arweave] saveOrder: ✅ uploaded — txId=$txId');
     return txId;
   }
 
@@ -123,20 +128,27 @@ class ArweaveOrderService {
   /// uploaded by a different wallet address variant or are corrupted).
   Future<List<Order>> restoreOrders(String walletAddress) async {
     final ownerHash = hashAddress(walletAddress);
+    debugPrint('[SKR-Arweave] restoreOrders: querying GraphQL  ownerHash=$ownerHash');
     final records = await _arweave.queryOrders(ownerHash: ownerHash);
+    debugPrint('[SKR-Arweave] restoreOrders: found ${records.length} records on Arweave');
 
     final orders = <Order>[];
-    for (final record in records) {
+    for (int i = 0; i < records.length; i++) {
+      final record = records[i];
+      debugPrint('[SKR-Arweave] restoreOrders: [${i + 1}/${records.length}] fetching txId=${record.txId}  orderId=${record.tags["Order-Id"]}');
       try {
         final cipherBytes = await _arweave.fetchContent(record.txId);
+        debugPrint('[SKR-Arweave] restoreOrders: fetched ${cipherBytes.length} bytes, decrypting…');
         final plainBytes = await _decrypt(cipherBytes);
-        final json =
-            jsonDecode(utf8.decode(plainBytes)) as Map<String, dynamic>;
-        orders.add(Order.fromJson(json));
+        final json = jsonDecode(utf8.decode(plainBytes)) as Map<String, dynamic>;
+        final order = Order.fromJson(json);
+        debugPrint('[SKR-Arweave] restoreOrders: ✅ decrypted order id=${order.id}  items=${order.items.length}');
+        orders.add(order);
       } catch (e) {
-        print('[ArweaveOrderService] skipping record ${record.txId}: $e');
+        debugPrint('[SKR-Arweave] restoreOrders: ❌ skipping txId=${record.txId}  error=$e');
       }
     }
+    debugPrint('[SKR-Arweave] restoreOrders: returning ${orders.length} valid orders');
     return orders;
   }
 
@@ -155,42 +167,59 @@ class ArweaveOrderService {
   Future<ArweaveSyncResult> sync({
     required String walletAddress,
     required List<Order> localOrders,
+    void Function(String status)? onProgress,
   }) async {
     final syncedIds = await _loadSyncedIds();
     final localIdSet = {for (final o in localOrders) o.id};
+    debugPrint('[SKR-Arweave] sync: localOrders=${localOrders.length}  alreadySynced=${syncedIds.length}');
 
     // --- Upload pass ---
     int uploaded = 0;
-    for (final order in localOrders) {
-      if (syncedIds.contains(order.id)) continue;
+    final unsynced = localOrders.where((o) => !syncedIds.contains(o.id)).toList();
+    debugPrint('[SKR-Arweave] sync: upload pass — ${unsynced.length} orders need upload  ids=${unsynced.map((o) => o.id).toList()}');
+
+    for (int i = 0; i < unsynced.length; i++) {
+      final order = unsynced[i];
+      onProgress?.call('Uploading ${i + 1}/${unsynced.length}...');
+      debugPrint('[SKR-Arweave] sync: uploading [${i + 1}/${unsynced.length}] orderId=${order.id}');
       try {
         await saveOrder(order, walletAddress);
         await _markSynced(order.id, syncedIds);
         uploaded++;
-      } catch (_) {
-        // Leave un-synced; will retry on next call.
+        debugPrint('[SKR-Arweave] sync: ✅ uploaded orderId=${order.id}');
+      } catch (e) {
+        debugPrint('[SKR-Arweave] sync: ❌ upload failed for orderId=${order.id}  error=$e');
       }
     }
+    debugPrint('[SKR-Arweave] sync: upload pass done — $uploaded/${unsynced.length} succeeded');
 
     // --- Download pass ---
     final pulled = <Order>[];
     try {
+      onProgress?.call('Checking Arweave...');
+      debugPrint('[SKR-Arweave] sync: download pass — querying Arweave for remote orders…');
       final remote = await restoreOrders(walletAddress);
-      for (final order in remote) {
-        if (!localIdSet.contains(order.id)) {
-          pulled.add(order);
-          await _markSynced(order.id, syncedIds);
-        }
+      debugPrint('[SKR-Arweave] sync: remote total=${remote.length}  localIdSet=${localIdSet.length}');
+      final newRemote = remote.where((o) => !localIdSet.contains(o.id)).toList();
+      debugPrint('[SKR-Arweave] sync: new remote orders (not in local)=${newRemote.length}  ids=${newRemote.map((o) => o.id).toList()}');
+      for (int i = 0; i < newRemote.length; i++) {
+        onProgress?.call('Pulling ${i + 1}/${newRemote.length}...');
+        debugPrint('[SKR-Arweave] sync: pulling [${i + 1}/${newRemote.length}] orderId=${newRemote[i].id}');
+        pulled.add(newRemote[i]);
+        await _markSynced(newRemote[i].id, syncedIds);
       }
-    } catch (_) {
-      // Non-fatal; download will retry on next sync.
+    } catch (e, st) {
+      debugPrint('[SKR-Arweave] sync: ❌ download pass error: $e');
+      debugPrint('[SKR-Arweave] sync: stack: $st');
     }
+    debugPrint('[SKR-Arweave] sync: download pass done — ${pulled.length} pulled');
 
     return ArweaveSyncResult(uploaded: uploaded, pulled: pulled);
   }
 
   /// Marks [orderId] as successfully backed up so the next sync skips it.
   Future<void> markSynced(String orderId) async {
+    debugPrint('[SKR-Arweave] markSynced: orderId=$orderId');
     final syncedIds = await _loadSyncedIds();
     await _markSynced(orderId, syncedIds);
   }

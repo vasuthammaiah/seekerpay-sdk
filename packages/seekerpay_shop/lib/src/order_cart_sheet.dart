@@ -1,3 +1,6 @@
+import 'local_llm_service.dart';
+import 'mrp_ai_reader.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'order_model.dart';
@@ -206,7 +209,40 @@ class OrderCartSheet extends ConsumerWidget {
     );
   }
 
-  void _openScanner(BuildContext context, WidgetRef ref) {
+
+  Future<bool> _showConfigAlert(BuildContext context, String title, String msg) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Text(msg, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL', style: TextStyle(color: Colors.white38))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black),
+            child: const Text('PROCEED'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _openScanner(BuildContext context, WidgetRef ref) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = prefs.getString('spay_barcode_lookup_key') ?? '';
+    final enabled = prefs.getBool('spay_barcode_lookup_enabled') ?? false;
+    
+    if (key.isEmpty || !enabled) {
+      final proceed = await _showConfigAlert(
+        context, 
+        'Barcode Lookup', 
+        'BarcodeLookup API key is not configured. The app will use the free Open Food Facts fallback, but results may be limited.'
+      );
+      if (!proceed) return;
+    }
+
     ProductScanSheet.show(
       context,
       onConfirm: (product, usdPrice) {
@@ -215,7 +251,19 @@ class OrderCartSheet extends ConsumerWidget {
     );
   }
 
-  void _openMrpScanner(BuildContext context, WidgetRef ref) {
+  Future<void> _openMrpScanner(BuildContext context, WidgetRef ref) async {
+    final isLlmInstalled = await LocalLlmService.isModelDownloaded();
+    final isClaudeConfigured = await MrpAiReader.isConfigured;
+    
+    if (!isLlmInstalled && !isClaudeConfigured) {
+      final proceed = await _showConfigAlert(
+        context, 
+        'AI Not Configured', 
+        'Please configure either the Local LLM or Anthropic API key in settings to scan labels for accurate results.'
+      );
+      if (!proceed) return;
+    }
+
     MrpScanSheet.show(
       context,
       onConfirm: (product, usdPrice) {

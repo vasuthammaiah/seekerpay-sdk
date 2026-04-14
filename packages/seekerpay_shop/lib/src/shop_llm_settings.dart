@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'local_llm_service.dart';
@@ -18,40 +19,96 @@ class _ShopLlmSettingsState extends State<ShopLlmSettings> {
   final _status = <_Step, _StepStatus>{ _Step.download: _StepStatus.idle, _Step.validate: _StepStatus.idle, _Step.initialize: _StepStatus.idle, _Step.ready: _StepStatus.idle };
   final _detail = <_Step, String>{};
   double _progress = 0;
-final _playgroundCtrl = TextEditingController(); bool _playgroundLoading = false; String? _playgroundResponse; bool _showRules = false;
+  StreamSubscription<double>? _downloadSub;
+  final _playgroundCtrl = TextEditingController(); bool _playgroundLoading = false; String? _playgroundResponse; bool _showRules = false;
 
   bool get _allOk => _status[_Step.download] == _StepStatus.ok && _status[_Step.validate] == _StepStatus.ok && _status[_Step.initialize] == _StepStatus.ok;
 
   @override void initState() { super.initState(); _resumeFromCurrentState(); }
-  @override void dispose() { _playgroundCtrl.dispose(); super.dispose(); }
+  @override void dispose() { _downloadSub?.cancel(); _playgroundCtrl.dispose(); super.dispose(); }
 
   Future<void> _resumeFromCurrentState() async {
-    final enabled = await LocalLlmService.isEnabled(); if (mounted) setState(() => _enabled = enabled);
-    final fileStatus = await LocalLlmService.validateModelFile(); if (!fileStatus.isValid) return;
+    final enabled = await LocalLlmService.isEnabled();
+    if (mounted) setState(() => _enabled = enabled);
+
+    // Re-attach to an in-progress background download.
+    if (LocalLlmService.isDownloading) {
+      if (mounted) setState(() => _progress = LocalLlmService.downloadProgress);
+      _mark(_Step.download, _StepStatus.running, 'Downloading…');
+      _mark(_Step.validate, _StepStatus.idle);
+      _mark(_Step.initialize, _StepStatus.idle);
+      _attachDownloadStream();
+      return;
+    }
+
+    final fileStatus = await LocalLlmService.validateModelFile();
+    if (!fileStatus.isValid) return;
     _mark(_Step.download, _StepStatus.ok, 'Downloaded · ${fileStatus.sizeLabel}');
     _mark(_Step.validate, _StepStatus.ok, '${fileStatus.sizeLabel} · ${fileStatus.path.split('/').last}');
     if (LocalLlmService.isModelLoaded) { _mark(_Step.initialize, _StepStatus.ok, 'Engine running on ${LocalLlmService.lastBackend}'); }
     else if (enabled) await _runInitialize();
   }
 
+  /// Subscribes to the in-progress download stream.
+  /// Automatically runs validate → init when the download completes.
+  void _attachDownloadStream() {
+    _downloadSub?.cancel();
+    final stream = LocalLlmService.downloadProgressStream;
+    if (stream == null) {
+      // Download already finished (very fast or re-attach too late).
+      _onDownloadComplete();
+      return;
+    }
+    _downloadSub = stream.listen(
+      (p) { if (mounted) setState(() => _progress = p); },
+      onDone: _onDownloadComplete,
+      onError: (Object e) { _mark(_Step.download, _StepStatus.failed, e.toString()); },
+      cancelOnError: true,
+    );
+  }
+
+  Future<void> _onDownloadComplete() async {
+    final fs = await LocalLlmService.validateModelFile();
+    if (!fs.isValid) {
+      _mark(_Step.download, _StepStatus.failed, 'File invalid (${fs.sizeLabel})');
+      return;
+    }
+    _mark(_Step.download, _StepStatus.ok, 'Downloaded · ${fs.sizeLabel}');
+    await _runValidate(fs);
+  }
+
   void _mark(_Step step, _StepStatus s, [String? d]) { if (!mounted) return; setState(() { _status[step] = s; if (d != null) _detail[step] = d; }); }
 
-  Future<void> _startDownload() async {
-    _mark(_Step.download, _StepStatus.running, 'Downloading…'); _mark(_Step.validate, _StepStatus.idle); _mark(_Step.initialize, _StepStatus.idle);
-    if (mounted) setState(() { _progress = 0; });
-    try {
-      await LocalLlmService.downloadModel(onProgress: (p) { if (mounted) setState(() => _progress = p); });
-      final fs = await LocalLlmService.validateModelFile();
-      if (!fs.isValid) { _mark(_Step.download, _StepStatus.failed, 'File invalid (${fs.sizeLabel})'); return; }
-      _mark(_Step.download, _StepStatus.ok, 'Downloaded · ${fs.sizeLabel}'); await _runValidate(fs);
-    } catch (e) { _mark(_Step.download, _StepStatus.failed, e.toString()); }
+  void _startDownload() {
+    if (LocalLlmService.isDownloading) {
+      // Already running (e.g. user tapped twice) — just re-attach.
+      if (mounted) setState(() => _progress = LocalLlmService.downloadProgress);
+      _mark(_Step.download, _StepStatus.running, 'Downloading…');
+      _attachDownloadStream();
+      return;
+    }
+    _mark(_Step.download, _StepStatus.running, 'Downloading…');
+    _mark(_Step.validate, _StepStatus.idle);
+    _mark(_Step.initialize, _StepStatus.idle);
+    if (mounted) setState(() => _progress = 0);
+
+    // Fire-and-forget: download runs in background independent of widget lifecycle.
+    LocalLlmService.downloadModel().catchError((_) {
+      // Error is also pushed to the stream and handled in _attachDownloadStream.
+    });
+    _attachDownloadStream();
   }
 
   Future<void> _runValidate(ModelFileStatus fs) async {
     _mark(_Step.validate, _StepStatus.running, 'Checking file…');
     if (!fs.exists) { _mark(_Step.validate, _StepStatus.failed, 'File not found'); return; }
-    if (!fs.isValid) { _mark(_Step.validate, _StepStatus.failed, 'File too small'); return; }
-    _mark(_Step.validate, _StepStatus.ok, '${fs.sizeLabel} · ${fs.path.split('/').last}'); await _runInitialize();
+    if (!fs.isValid) {
+      final msg = fs.expectedBytes > 0 ? 'Size mismatch: ${fs.sizeLabel}' : 'File too small (${fs.sizeLabel})';
+      _mark(_Step.validate, _StepStatus.failed, msg);
+      return;
+    }
+    _mark(_Step.validate, _StepStatus.ok, '${fs.sizeLabel} · ${fs.path.split('/').last}');
+    await _runInitialize();
   }
 
   Future<void> _runInitialize() async {

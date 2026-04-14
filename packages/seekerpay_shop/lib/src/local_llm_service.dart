@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +18,30 @@ class LocalLlmService {
   static bool _initialized = false;
   static String _lastBackend = 'device';
   static String get lastBackend => _lastBackend;
+
+  // ── Background download state ──────────────────────────────────────────────
+  static const _taskId = 'skr_shop_llm_model';
+  static const _downloadUrl = 'https://drive.usercontent.google.com/download?id=1naDsVGLI0OM9McAh6hrHhnpP_4rtnhsD&export=download&confirm=t';
+
+  static bool _isDownloading = false;
+  static double _downloadProgress = 0.0;
+  static int _expectedBytes = 0;
+  static StreamController<double>? _progressSc;
+
+  /// True while a download is in progress (survives widget navigation).
+  static bool get isDownloading => _isDownloading;
+
+  /// Current download progress 0.0–1.0.
+  static double get downloadProgress => _downloadProgress;
+
+  /// Expected file size in bytes.
+  static int get expectedBytes => _expectedBytes;
+
+  /// Broadcast stream of progress values (0.0–1.0).
+  /// Null when no download is running.
+  /// Closes when download completes or fails.
+  static Stream<double>? get downloadProgressStream => _progressSc?.stream;
+  // ──────────────────────────────────────────────────────────────────────────
 
   static void configure({String? country}) {
     if (country != null) _country = country;
@@ -51,9 +76,11 @@ class LocalLlmService {
   static Future<ModelFileStatus> validateModelFile() async {
     final dir = await getApplicationSupportDirectory();
     final dest = File('${dir.path}/$_modelFileName');
-    if (!await dest.exists()) return ModelFileStatus(exists: false, sizeBytes: 0, path: dest.path);
+    if (!await dest.exists()) {
+      return ModelFileStatus(exists: false, sizeBytes: 0, expectedBytes: _expectedBytes, path: dest.path);
+    }
     final size = await dest.length();
-    return ModelFileStatus(exists: true, sizeBytes: size, path: dest.path);
+    return ModelFileStatus(exists: true, sizeBytes: size, expectedBytes: _expectedBytes, path: dest.path);
   }
 
   static bool get isModelLoaded => _model != null;
@@ -73,37 +100,135 @@ class LocalLlmService {
     final dir = await getApplicationSupportDirectory();
     final file = File('${dir.path}/$_modelFileName');
     if (await file.exists()) await file.delete();
+    _expectedBytes = 0;
   }
 
-  static Future<void> downloadModel({required void Function(double progress) onProgress}) async {
-    const url = 'https://drive.usercontent.google.com/download?id=1naDsVGLI0OM9McAh6hrHhnpP_4rtnhsD&export=download&confirm=t';
-    final dir = await getApplicationSupportDirectory();
-    final dest = File('${dir.path}/$_modelFileName');
-    await dest.parent.create(recursive: true);
-    
-    final client = HttpClient();
-    final request = await client.getUrl(Uri.parse(url));
-    final response = await request.close();
-    final sink = dest.openWrite();
-    int received = 0;
-    int total = response.contentLength;
-    
-    await for (var chunk in response) {
-      sink.add(chunk);
-      received += chunk.length;
-      if (total > 0) onProgress(received / total);
+  /// Initializes the native background downloader. Call once at app start
+  /// (e.g. in main.dart or alongside [init]).
+  static Future<void> initDownloader() async {
+    await FileDownloader().configure(
+      globalConfig: [
+        (Config.requestTimeout, const Duration(seconds: 60)),
+      ],
+      androidConfig: [
+        (Config.useCacheDir, false),
+      ],
+    );
+    // Re-attach to a download that was running before the app was killed.
+    final tasks = await FileDownloader().allTaskIds();
+    if (tasks.contains(_taskId)) {
+      _isDownloading = true;
+      _progressSc = StreamController<double>.broadcast();
+      _listenToTask();
     }
-    await sink.close();
-    client.close();
-    
-    await FlutterGemma.installModel(modelType: ModelType.gemmaIt, fileType: ModelFileType.task).fromFile(dest.path).install();
+  }
+
+  /// Starts downloading the model using the native platform downloader.
+  ///
+  /// - **Android**: uses `DownloadManager` / `WorkManager` — continues if app is killed.
+  /// - **iOS**: uses `NSURLSession` background session — continues if app is suspended.
+  ///
+  /// Safe to call multiple times — ignores the call if already downloading.
+  /// Progress is emitted on [downloadProgressStream].
+  /// Stream closes (done) on success, closes with error on failure.
+  static Future<void> downloadModel() async {
+    if (_isDownloading) return;
+    _isDownloading = true;
+    _downloadProgress = 0.0;
+    _progressSc = StreamController<double>.broadcast();
+
+    final dir = await getApplicationSupportDirectory();
+    final destDir = dir.path;
+
+    final task = DownloadTask(
+      taskId: _taskId,
+      url: _downloadUrl,
+      filename: _modelFileName,
+      directory: destDir,
+      baseDirectory: BaseDirectory.root,
+      updates: Updates.statusAndProgress,
+      allowPause: true,
+      retries: 2,
+    );
+
+    final result = await FileDownloader().enqueue(task);
+    if (!result) {
+      _isDownloading = false;
+      _progressSc?.addError(Exception('Failed to enqueue download'));
+      await _progressSc?.close();
+      _progressSc = null;
+      return;
+    }
+
+    _listenToTask();
+  }
+
+  static void _listenToTask() {
+    FileDownloader().updates.listen(
+      (update) async {
+        if (update is TaskProgressUpdate && update.task.taskId == _taskId) {
+          if (update.progress >= 0) {
+            _downloadProgress = update.progress;
+            // Derive expectedBytes from task metadata if available.
+            if (update.expectedFileSize > 0) {
+              _expectedBytes = update.expectedFileSize;
+            }
+            _progressSc?.add(_downloadProgress);
+          }
+        } else if (update is TaskStatusUpdate && update.task.taskId == _taskId) {
+          switch (update.status) {
+            case TaskStatus.complete:
+              await _onNativeDownloadComplete(update.task);
+            case TaskStatus.failed:
+            case TaskStatus.notFound:
+              _isDownloading = false;
+              _progressSc?.addError(Exception('Download failed: ${update.status}'));
+              await _progressSc?.close();
+              _progressSc = null;
+            default:
+              break;
+          }
+        }
+      },
+    );
+  }
+
+  static Future<void> _onNativeDownloadComplete(Task task) async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final dest = File('${dir.path}/$_modelFileName');
+
+      // Verify file size if we know the expected bytes.
+      if (_expectedBytes > 0 && await dest.exists()) {
+        final actualSize = await dest.length();
+        if (actualSize != _expectedBytes) {
+          throw Exception(
+            'File size mismatch: got ${actualSize ~/ (1024 * 1024)} MB, '
+            'expected ${_expectedBytes ~/ (1024 * 1024)} MB',
+          );
+        }
+      }
+
+      await FlutterGemma.installModel(modelType: ModelType.gemmaIt, fileType: ModelFileType.task)
+          .fromFile(dest.path)
+          .install();
+
+      _downloadProgress = 1.0;
+      _progressSc?.add(1.0);
+    } catch (e) {
+      _progressSc?.addError(e);
+    } finally {
+      _isDownloading = false;
+      await _progressSc?.close();
+      _progressSc = null;
+    }
   }
 
   static String _getSystemPrompt() {
     return '''Task: Extract product info.
 Rules:
 1. productName: Literal name. No labels.
-2. price: Numeric total as STRING (e.g. "349.00"). PRESERVE DOT. 
+2. price: Numeric total as STRING (e.g. "349.00"). PRESERVE DOT.
 3. expDate: MM/YY.
 4. candidatePrices: Array of STRINGS of all prices found.
 Output: {"productName":str,"price":str,"currency":"INR","expDate":str,"candidatePrices":[str]}''';
@@ -143,10 +268,10 @@ Output: {"productName":str,"price":str,"currency":"INR","expDate":str,"candidate
       final s = raw.indexOf('{'), e = raw.lastIndexOf('}');
       if (s == -1 || e <= s) return null;
       final j = jsonDecode(raw.substring(s, e + 1)) as Map<String, dynamic>;
-      
+
       final rawPrice = j['price']?.toString() ?? '';
       final price = _cleanPrice(rawPrice);
-      
+
       final cp = j['candidatePrices'];
       List<double> candidates = [];
       if (cp is List) {
@@ -170,9 +295,7 @@ Output: {"productName":str,"price":str,"currency":"INR","expDate":str,"candidate
     final clean = input.replaceAll(RegExp(r'[^0-9.]'), '');
     double? val = double.tryParse(clean);
     if (val == null) return null;
-    
-    // Smart Correction: If price > 1000 and ends in 00/50/90 and has NO dot, 
-    // it likely needs a decimal shift.
+
     if (val > 1000 && !input.contains('.')) {
       final s = val.toInt().toString();
       if (s.endsWith('00') || s.endsWith('50') || s.endsWith('90')) {
@@ -188,12 +311,29 @@ Output: {"productName":str,"price":str,"currency":"INR","expDate":str,"candidate
 class ModelFileStatus {
   final bool   exists;
   final int    sizeBytes;
+  final int    expectedBytes;
   final String path;
-  const ModelFileStatus({required this.exists, required this.sizeBytes, required this.path});
-  bool get isValid => exists && sizeBytes > 100 * 1024 * 1024;
+
+  const ModelFileStatus({
+    required this.exists,
+    required this.sizeBytes,
+    this.expectedBytes = 0,
+    required this.path,
+  });
+
+  bool get isValid {
+    if (!exists || sizeBytes < 100 * 1024 * 1024) return false;
+    if (expectedBytes > 0) return sizeBytes == expectedBytes;
+    return true;
+  }
+
   String get sizeLabel {
     if (!exists) return 'Not found';
     final mb = sizeBytes / (1024 * 1024);
+    if (expectedBytes > 0) {
+      final expMb = expectedBytes / (1024 * 1024);
+      return '${mb.toStringAsFixed(0)} / ${expMb.toStringAsFixed(0)} MB';
+    }
     return '${mb.toStringAsFixed(0)} MB';
   }
 }

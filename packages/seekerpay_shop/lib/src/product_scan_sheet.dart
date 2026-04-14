@@ -66,8 +66,37 @@ class _ProductScanSheetState extends ConsumerState<ProductScanSheet> {
     if (mounted) setState(() { _controller = ctrl; _cameraReady = true; });
   }
 
+
+  Future<bool> _showConfigAlert() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Barcode Lookup', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'BarcodeLookup API key is not configured. The app will use the free Open Food Facts fallback, but results may be limited. You can also add items manually.',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL', style: TextStyle(color: Colors.white38))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black),
+            child: const Text('PROCEED'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
   Future<void> _capture() async {
     if (_controller == null || _processing) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = prefs.getString('spay_barcode_lookup_key') ?? '';
+    final enabled = prefs.getBool('spay_barcode_lookup_enabled') ?? false;
+    if (key.isEmpty || !enabled) {
+      final proceed = await _showConfigAlert();
+      if (!proceed) return;
+    }
     setState(() => _processing = true);
     try {
       final photo = await _controller!.takePicture();

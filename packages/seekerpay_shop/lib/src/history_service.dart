@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'order_model.dart';
 import 'product_model.dart';
 import 'storage/arweave_order_service.dart';
@@ -35,22 +36,40 @@ class HistoryState {
 
   /// True while a background Arweave sync is in progress.
   final bool isSyncing;
+  final Set<String> syncedOrderIds;
+
+  /// Live status updated per step during sync (e.g. "Uploading 2/5...").
+  /// Cleared when sync ends.
+  final String syncStatus;
+
+  /// Persistent summary shown in the banner after sync completes
+  /// (e.g. "2 UPLOADED · 1 PULLED" or "ALREADY UP TO DATE").
+  final String syncSummary;
 
   const HistoryState({
     this.orders = const [],
     this.scannedProducts = const [],
     this.isSyncing = false,
+    this.syncedOrderIds = const {},
+    this.syncStatus = '',
+    this.syncSummary = '',
   });
 
   HistoryState copyWith({
     List<Order>? orders,
     List<Product>? scannedProducts,
     bool? isSyncing,
+    Set<String>? syncedOrderIds,
+    String? syncStatus,
+    String? syncSummary,
   }) {
     return HistoryState(
       orders: orders ?? this.orders,
       scannedProducts: scannedProducts ?? this.scannedProducts,
       isSyncing: isSyncing ?? this.isSyncing,
+      syncedOrderIds: syncedOrderIds ?? this.syncedOrderIds,
+      syncStatus: syncStatus ?? this.syncStatus,
+      syncSummary: syncSummary ?? this.syncSummary,
     );
   }
 
@@ -68,8 +87,6 @@ class HistoryState {
 class HistoryNotifier extends Notifier<HistoryState> {
   final _localService = LocalHistoryService();
 
-  // Arweave service is created lazily on the first call that has a wallet
-  // address. Re-created if the wallet address changes (e.g. wallet switch).
   ArweaveOrderService? _arweave;
   String? _arweaveWalletAddress;
 
@@ -81,20 +98,22 @@ class HistoryNotifier extends Notifier<HistoryState> {
     return const HistoryState();
   }
 
-  Future<void> _load() async {
-    final data = await _localService.loadHistory();
-    state = HistoryState.fromJson(data);
+  Future<Set<String>> _loadSyncedIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('skr_shop_arweave_synced');
+    if (raw == null) return {};
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.map((e) => e as String).toSet();
+    } catch (_) { return {}; }
   }
 
-  // ---------------------------------------------------------------------------
-  // Lazy Arweave initialisation (wallet-address-keyed)
-  // ---------------------------------------------------------------------------
+  Future<void> _load() async {
+    final data = await _localService.loadHistory();
+    final synced = await _loadSyncedIds();
+    state = HistoryState.fromJson(data).copyWith(syncedOrderIds: synced);
+  }
 
-  /// Returns a ready [ArweaveOrderService] keyed to [walletAddress].
-  ///
-  /// Creates a new instance if none exists yet or if the wallet address changed.
-  /// The encryption key is derived from [walletAddress], so it is identical on
-  /// every device and after any reinstall with the same wallet.
   Future<ArweaveOrderService?> _getArweave(String walletAddress) async {
     if (_arweave != null && _arweaveWalletAddress == walletAddress) {
       return _arweave;
@@ -109,83 +128,102 @@ class HistoryNotifier extends Notifier<HistoryState> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Background sync — bidirectional push + pull
-  // ---------------------------------------------------------------------------
+  Future<ArweaveSyncResult?> startBackgroundSync(String walletAddress) async {
+    if (walletAddress.isEmpty) {
+      debugPrint('[SKR-Sync] startBackgroundSync: skipped — walletAddress is empty');
+      return null;
+    }
+    if (_syncInProgress) {
+      debugPrint('[SKR-Sync] startBackgroundSync: skipped — sync already in progress');
+      return null;
+    }
 
-  /// Bidirectional Arweave sync for [walletAddress].
-  ///
-  /// 1. **Upload pass** — every local order not yet on Arweave is uploaded and
-  ///    marked synced. This catches up on any orders that were saved while
-  ///    offline or before the wallet was connected.
-  /// 2. **Download pass** — every Arweave order absent from local storage is
-  ///    pulled down, merged into local state, and written to the JSON cache.
-  ///    This restores order history after a reinstall or on a new device.
-  ///
-  /// After merge, [historyProvider] state updates automatically, so both
-  /// RECENT SALES and the full order history tab reflect the latest data.
-  ///
-  /// Call this once per session when the wallet address is known. Safe to call
-  /// multiple times — a guard prevents concurrent runs.
-  Future<void> startBackgroundSync(String walletAddress) async {
-    if (walletAddress.isEmpty || _syncInProgress) return;
     _syncInProgress = true;
-    state = state.copyWith(isSyncing: true);
+    final syncedBefore = await _loadSyncedIds();
+    debugPrint('[SKR-Sync] ── START SYNC ──────────────────────────────────');
+    debugPrint('[SKR-Sync] wallet   : ${walletAddress.substring(0, 8)}…${walletAddress.substring(walletAddress.length - 4)}');
+    debugPrint('[SKR-Sync] local orders  : ${state.orders.length}');
+    debugPrint('[SKR-Sync] already synced: ${syncedBefore.length}  ids=$syncedBefore');
+    state = state.copyWith(isSyncing: true, syncedOrderIds: syncedBefore);
 
     try {
+      debugPrint('[SKR-Sync] initialising ArweaveOrderService…');
       final arweave = await _getArweave(walletAddress);
-      if (arweave == null) return;
+      if (arweave == null) {
+        debugPrint('[SKR-Sync] ERROR: ArweaveOrderService.init() returned null — aborting');
+        state = state.copyWith(syncSummary: 'Sync failed (init error)');
+        return null;
+      }
+      debugPrint('[SKR-Sync] ArweaveOrderService ready');
 
       final result = await arweave.sync(
         walletAddress: walletAddress,
         localOrders: List.unmodifiable(state.orders),
+        onProgress: (status) {
+          debugPrint('[SKR-Sync] progress: $status');
+          state = state.copyWith(syncStatus: status);
+        },
       );
 
-      if (kDebugMode) {
-        debugPrint(
-          '[HistoryNotifier] sync done — '
-          'uploaded=${result.uploaded} pulled=${result.pulled.length}',
-        );
+      debugPrint('[SKR-Sync] ── SYNC RESULT ──');
+      debugPrint('[SKR-Sync] uploaded : ${result.uploaded}');
+      debugPrint('[SKR-Sync] pulled   : ${result.pulled.length}  ids=${result.pulled.map((o) => o.id).toList()}');
+      debugPrint('[SKR-Sync] hasChanges: ${result.hasChanges}');
+
+      final syncedAfter = await _loadSyncedIds();
+      debugPrint('[SKR-Sync] syncedIds after: ${syncedAfter.length}  ids=$syncedAfter');
+
+      // Build a persistent summary to show in the UI banner.
+      final String summary;
+      if (!result.hasChanges) {
+        summary = 'Already up to date';
+      } else {
+        final parts = <String>[];
+        if (result.uploaded > 0) parts.add('${result.uploaded} uploaded');
+        if (result.pulled.isNotEmpty) parts.add('${result.pulled.length} pulled');
+        summary = parts.join(' · ');
       }
+      debugPrint('[SKR-Sync] summary: $summary');
 
       if (result.pulled.isNotEmpty) {
         final localIds = {for (final o in state.orders) o.id};
-        final newOrders =
-            result.pulled.where((o) => !localIds.contains(o.id)).toList();
+        final newOrders = result.pulled.where((o) => !localIds.contains(o.id)).toList();
+        debugPrint('[SKR-Sync] new orders to merge: ${newOrders.length}');
 
         if (newOrders.isNotEmpty) {
           final merged = [...state.orders, ...newOrders]
             ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-          // Also archive product entries from pulled orders into local catalog.
           final nextProducts = List<Product>.from(state.scannedProducts);
           for (final order in newOrders) {
             for (final item in order.items) {
-              final i = nextProducts
-                  .indexWhere((p) => p.barcode == item.product.barcode);
-              if (i >= 0) {
-                nextProducts[i] = item.product;
-              } else {
-                nextProducts.add(item.product);
-              }
+              final i = nextProducts.indexWhere((p) => p.barcode == item.product.barcode);
+              if (i >= 0) { nextProducts[i] = item.product; } else { nextProducts.add(item.product); }
             }
           }
 
-          state = state.copyWith(orders: merged, scannedProducts: nextProducts);
+          state = state.copyWith(orders: merged, scannedProducts: nextProducts, syncedOrderIds: syncedAfter, syncSummary: summary);
           await _localService.saveHistory(state.toJson());
+          debugPrint('[SKR-Sync] local history saved with ${merged.length} total orders');
+        } else {
+          state = state.copyWith(syncedOrderIds: syncedAfter, syncSummary: summary);
         }
+      } else {
+        state = state.copyWith(syncedOrderIds: syncedAfter, syncSummary: summary);
       }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[HistoryNotifier] sync error: $e');
+
+      debugPrint('[SKR-Sync] ── DONE ─────────────────────────────────────');
+      return result;
+    } catch (e, st) {
+      debugPrint('[SKR-Sync] ERROR: $e');
+      debugPrint('[SKR-Sync] STACK: $st');
+      state = state.copyWith(syncSummary: 'Sync failed');
+      return null;
     } finally {
       _syncInProgress = false;
-      state = state.copyWith(isSyncing: false);
+      state = state.copyWith(isSyncing: false, syncStatus: '');
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Mutating operations
-  // ---------------------------------------------------------------------------
 
   Future<void> deleteOrder(String orderId) async {
     final nextOrders = state.orders.where((o) => o.id != orderId).toList();
@@ -194,8 +232,7 @@ class HistoryNotifier extends Notifier<HistoryState> {
   }
 
   Future<void> deleteProduct(String barcode) async {
-    final nextProducts =
-        state.scannedProducts.where((p) => p.barcode != barcode).toList();
+    final nextProducts = state.scannedProducts.where((p) => p.barcode != barcode).toList();
     state = state.copyWith(scannedProducts: nextProducts);
     await _localService.saveHistory(state.toJson());
   }
@@ -208,31 +245,19 @@ class HistoryNotifier extends Notifier<HistoryState> {
     await _localService.saveHistory(state.toJson());
   }
 
-  /// Saves [order] to local storage and queues an immediate Arweave backup.
-  ///
-  /// [walletAddress] must be the connected Solana wallet address.
-  /// Omit (or pass empty) to skip the Arweave backup (local-only save).
   Future<void> saveOrder(Order order, {String? walletAddress}) async {
-    // Prevent duplicate order IDs.
     final nextOrders = state.orders.where((o) => o.id != order.id).toList();
     nextOrders.add(order);
 
-    // Archive unique products from the order into the local catalog.
     final nextProducts = List<Product>.from(state.scannedProducts);
     for (final item in order.items) {
-      final i =
-          nextProducts.indexWhere((p) => p.barcode == item.product.barcode);
-      if (i >= 0) {
-        nextProducts[i] = item.product;
-      } else {
-        nextProducts.add(item.product);
-      }
+      final i = nextProducts.indexWhere((p) => p.barcode == item.product.barcode);
+      if (i >= 0) { nextProducts[i] = item.product; } else { nextProducts.add(item.product); }
     }
 
     state = state.copyWith(orders: nextOrders, scannedProducts: nextProducts);
     await _localService.saveHistory(state.toJson());
 
-    // Arweave backup — fire and forget, never blocks the UI.
     if (walletAddress != null && walletAddress.isNotEmpty) {
       _backupToArweave(order, walletAddress);
     }
@@ -243,27 +268,17 @@ class HistoryNotifier extends Notifier<HistoryState> {
     await _localService.saveHistory(state.toJson());
   }
 
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
   void _backupToArweave(Order order, String walletAddress) {
     _getArweave(walletAddress).then((arweave) {
       if (arweave == null) return;
       arweave.saveOrder(order, walletAddress).then((txId) {
         arweave.markSynced(order.id);
-        if (kDebugMode) {
-          debugPrint('[HistoryNotifier] order ${order.id} backed up → tx=$txId');
-        }
+        _loadSyncedIds().then((synced) => state = state.copyWith(syncedOrderIds: synced));
       }).catchError((Object e) {
-        if (kDebugMode) {
-          debugPrint('[HistoryNotifier] Arweave backup failed for ${order.id}: $e');
-        }
-        // Non-fatal: retried on the next startBackgroundSync.
+        if (kDebugMode) debugPrint('[HistoryNotifier] Arweave backup failed for ${order.id}: $e');
       });
     });
   }
 }
 
-final historyProvider =
-    NotifierProvider<HistoryNotifier, HistoryState>(HistoryNotifier.new);
+final historyProvider = NotifierProvider<HistoryNotifier, HistoryState>(HistoryNotifier.new);

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as pkg_crypto;
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,6 +31,7 @@ class IrysClient {
   static const _prefSignPriv = 'skr_shop_irys_sign_priv';
   static const _prefSignPub = 'skr_shop_irys_sign_pub';
 
+  /// Irys node that accepts Solana / Ed25519 signed data items.
   static const _nodeUrl = 'https://uploader.irys.xyz';
   static const _legacyNodeUrl = 'https://node2.irys.xyz';
 
@@ -52,6 +54,7 @@ class IrysClient {
     final pubB64 = prefs.getString(_prefSignPub);
 
     if (privB64 != null && pubB64 != null) {
+      debugPrint('[SKR-Irys] init: loaded existing Ed25519 keypair from prefs');
       final privBytes = base64.decode(privB64);
       final pubBytes = base64.decode(pubB64);
       final kp = SimpleKeyPairData(
@@ -66,11 +69,13 @@ class IrysClient {
       );
     }
 
+    debugPrint('[SKR-Irys] init: generating new Ed25519 keypair (first run)');
     final kp = await _ed25519.newKeyPair();
     final pub = await kp.extractPublicKey();
     final priv = await kp.extractPrivateKeyBytes();
     await prefs.setString(_prefSignPriv, base64.encode(priv));
     await prefs.setString(_prefSignPub, base64.encode(pub.bytes));
+    debugPrint('[SKR-Irys] init: new keypair saved — pubKey=${base64.encode(pub.bytes).substring(0, 12)}…');
     return IrysClient._(
       kp,
       Uint8List.fromList(pub.bytes),
@@ -87,7 +92,9 @@ class IrysClient {
   // ---------------------------------------------------------------------------
 
   Future<String> upload(Uint8List data, List<IrysTag> tags) async {
+    debugPrint('[SKR-Irys] upload: building ANS-104 data item  dataSize=${data.length} bytes  tags=${tags.map((t) => "${t.name}=${t.value}").toList()}');
     final dataItem = await _buildDataItem(data, tags);
+    debugPrint('[SKR-Irys] upload: data item size=${dataItem.length} bytes');
 
     final uploadUrls = [
       '$_nodeUrl/upload/solana',
@@ -97,6 +104,7 @@ class IrysClient {
     IrysUploadException? lastError;
 
     for (final url in uploadUrls) {
+      debugPrint('[SKR-Irys] upload: POST $url');
       http.Response response;
       try {
         response = await http
@@ -110,22 +118,28 @@ class IrysClient {
             )
             .timeout(const Duration(seconds: 30));
       } catch (e) {
+        debugPrint('[SKR-Irys] upload: ❌ network error at $url  error=$e');
         lastError = IrysUploadException('Network error at $url: $e', 0);
         continue;
       }
+
+      debugPrint('[SKR-Irys] upload: response status=${response.statusCode}  body=${response.body.substring(0, response.body.length.clamp(0, 300))}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         final txId = body['id'] as String?;
         if (txId == null || txId.isEmpty) {
+          debugPrint('[SKR-Irys] upload: ❌ empty txId in response  body=${response.body}');
           throw IrysUploadException(
               'Irys returned empty tx id', response.statusCode);
         }
+        debugPrint('[SKR-Irys] upload: ✅ success  txId=$txId');
         return txId;
       }
 
       // 429 (rate limit): try next node.
       if (response.statusCode == 429) {
+        debugPrint('[SKR-Irys] upload: ❌ rate limited at $url (429) — trying next node');
         lastError = IrysUploadException(
           'Irys rate limited at $url (429): ${response.body}',
           response.statusCode,
@@ -133,21 +147,24 @@ class IrysClient {
         continue;
       }
 
-      // Other 4xx: client/format error — stop.
+      // 400/401/403/422 = definite client/auth error — abort immediately.
       if (response.statusCode >= 400 && response.statusCode < 500) {
+        debugPrint('[SKR-Irys] upload: ❌ client error ${response.statusCode} at $url — aborting  body=${response.body}');
         throw IrysUploadException(
           'Irys rejected upload at $url (${response.statusCode}): ${response.body}',
           response.statusCode,
         );
       }
 
-      // 5xx: try next node.
+      // 5xx — try next node.
+      debugPrint('[SKR-Irys] upload: ❌ ${response.statusCode} at $url — trying next node  body=${response.body}');
       lastError = IrysUploadException(
-        'Irys server error at $url (${response.statusCode}): ${response.body}',
+        'Irys error at $url (${response.statusCode}): ${response.body}',
         response.statusCode,
       );
     }
 
+    debugPrint('[SKR-Irys] upload: ❌ all nodes failed  lastError=$lastError');
     throw lastError ?? IrysUploadException('All Irys nodes failed', 503);
   }
 
@@ -192,10 +209,11 @@ class IrysClient {
   // Arweave deepHash (SHA-384 based)
   // ---------------------------------------------------------------------------
 
+  /// Computes the Arweave deepHash of [data], which is either a [Uint8List]
+  /// (leaf) or a [List] of recursively hashable items.
   static Uint8List _deepHash(dynamic data) {
     if (data is Uint8List || data is List<int>) {
-      final bytes =
-          data is Uint8List ? data : Uint8List.fromList(data as List<int>);
+      final bytes = data is Uint8List ? data : Uint8List.fromList(data as List<int>);
       final tag = utf8.encode('blob');
       final length = utf8.encode(bytes.length.toString());
       return Uint8List.fromList(

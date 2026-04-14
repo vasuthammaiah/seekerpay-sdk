@@ -30,8 +30,8 @@ dependencies:
   image: ^4.2.0
   image_picker: ^1.1.2
   path_provider: ^2.1.4
+  background_downloader: ^9.0.0
   flutter_gemma: ^0.13.2
-  flutter_tesseract_ocr: ^0.4.11
   permission_handler: ^11.0.0
   google_sign_in: ^6.2.1
   googleapis: ^13.2.0

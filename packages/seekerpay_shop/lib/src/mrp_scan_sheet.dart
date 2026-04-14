@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'currency_converter.dart';
 import 'local_llm_service.dart';
 import 'mrp_data.dart';
+import 'mrp_ai_reader.dart';
 import 'mrp_parser.dart';
 import 'product_model.dart';
 
@@ -43,8 +44,36 @@ class _MrpScanSheetState extends ConsumerState<MrpScanSheet> {
     if (mounted) setState(() { _controller = ctrl; _cameraReady = true; });
   }
 
+
+  Future<bool> _showConfigAlert() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('AI Not Configured', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Please configure either the Local LLM or Anthropic API key in settings to scan labels for accurate results.',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL', style: TextStyle(color: Colors.white38))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black),
+            child: const Text('PROCEED ANYWAY'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
   Future<void> _capture() async {
     if (_controller == null) return;
+    final isLlmInstalled = await LocalLlmService.isModelDownloaded();
+    final isClaudeConfigured = await MrpAiReader.isConfigured;
+    if (!isLlmInstalled && !isClaudeConfigured) {
+      final proceed = await _showConfigAlert();
+      if (!proceed) return;
+    }
     setState(() => _status = _Status.processing);
     try {
       final photo = await _controller!.takePicture();
