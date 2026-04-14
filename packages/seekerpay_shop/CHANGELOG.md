@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Remove unused imports, fields, and local variables
+- Replace deprecated `withOpacity()` with `withValues(alpha:)`
+
 ## 1.0.0
 
 - Initial release
