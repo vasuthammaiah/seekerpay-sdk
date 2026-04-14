@@ -8,7 +8,7 @@ import 'product_model.dart';
 import 'product_lookup_service.dart';
 import 'history_service.dart';
 import 'currency_converter.dart';
-import 'mrp_data.dart';
+
 
 const _kPrimary = Color(0xFFFFEB3B);
 

@@ -5,8 +5,6 @@ import 'order_notifier.dart';
 import 'product_scan_notifier.dart';
 import 'product_scan_sheet.dart';
 import 'mrp_scan_sheet.dart';
-import 'history_service.dart';
-
 const _kPrimary = Color(0xFFFFEB3B);
 const _kCard = Color(0xFF1A1A1A);
 

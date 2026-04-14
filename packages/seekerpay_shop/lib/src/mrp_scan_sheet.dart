@@ -7,18 +7,13 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'currency_converter.dart';
 import 'local_llm_service.dart';
 import 'mrp_data.dart';
 import 'mrp_parser.dart';
 import 'product_model.dart';
-import 'product_lookup_service.dart';
-import 'history_service.dart';
 
 const _kPrimary = Color(0xFFFFEB3B);
-const _kSurface = Color(0xFF111111);
-const _kGreen = Color(0xFF00E676);
 
 enum _Status { camera, processing, llm, result, error }
 
@@ -179,7 +174,7 @@ class _MrpScanSheetState extends ConsumerState<MrpScanSheet> {
   }
 
   Widget _resultView() {
-    final mrp = _mrpData; final hasData = mrp != null && (mrp.hasName || mrp.hasPrice);
+    final mrp = _mrpData;
     final symbol = mrp?.currencySymbol ?? '\$';
     final code = mrp?.currencyCode ?? 'USD';
 

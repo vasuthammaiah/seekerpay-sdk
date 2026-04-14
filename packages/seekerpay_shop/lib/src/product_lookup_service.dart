@@ -3,10 +3,6 @@ import 'package:http/http.dart' as http;
 import 'product_model.dart';
 
 class ProductLookupService {
-  static const _foodApiBase = 'https://world.openfoodfacts.org/api/v0/product';
-  static const _beautyApiBase = 'https://world.openbeautyfacts.org/api/v0/product';
-  static const _userAgent = 'SeekerPay/1.0 (contact@seekerpay.com)';
-
   final String? barcodeLookupApiKey;
   final bool enabled;
   

@@ -1,5 +1,4 @@
 import 'product_model.dart';
-import 'dart:convert';
 
 class OrderItem {
   final Product product;
