@@ -5,13 +5,8 @@ import 'package:http/http.dart' as http;
 
 /// A lightweight record returned by [ArweaveClient.queryInbox].
 class ArweaveMessage {
-  /// Arweave transaction ID.
   final String txId;
-
-  /// All tags attached to the data item.
   final Map<String, String> tags;
-
-  /// Block timestamp (seconds since epoch), null if not yet mined.
   final int? blockTimestamp;
 
   const ArweaveMessage({
@@ -22,29 +17,19 @@ class ArweaveMessage {
 }
 
 /// Queries the Arweave GraphQL API and fetches raw data item content.
-///
-/// ### GraphQL endpoint
-/// `https://node2.irys.xyz/graphql` — Irys node GraphQL, indexes transactions
-/// immediately after upload (no need to wait for Arweave block mining).
-/// This gives near-instant message delivery (~seconds instead of minutes/hours).
-///
-/// ### Content fetch
-/// Tries the Irys gateway first (`https://gateway.irys.xyz/<txId>`) since it
-/// serves content immediately after upload. Falls back to `https://arweave.net/<txId>`
-/// once the bundle is mined (may take 10–60+ minutes after upload).
 class ArweaveClient {
-  static const _graphqlUrl = 'https://node2.irys.xyz/graphql';
   static const _irysGatewayUrl = 'https://gateway.irys.xyz';
   static const _arweaveGatewayUrl = 'https://arweave.net';
   static const _appName = 'SKR-Chat';
 
-  /// Queries Arweave for messages addressed to [toHash] (a hashed wallet
-  /// address produced by [ChatCrypto.hashAddress]).
-  ///
-  /// [afterTimestamp]: only return transactions whose block timestamp is after
-  /// this value (seconds since epoch). Pass 0 to fetch all.
-  ///
-  /// Returns up to [limit] results sorted newest-first.
+  static const _graphqlUrls = [
+    'https://node1.irys.xyz/graphql',
+    'https://arweave.net/graphql',
+    'https://node2.irys.xyz/graphql',
+    'https://uploader.irys.xyz/graphql',
+  ];
+
+  /// Queries Arweave for messages addressed to [toHash].
   Future<List<ArweaveMessage>> queryInbox({
     required String toHash,
     int afterTimestamp = 0,
@@ -73,55 +58,60 @@ class ArweaveClient {
       ],
     };
 
-    final response = await http
-        .post(
-          Uri.parse(_graphqlUrl),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'query': query, 'variables': variables}),
-        )
-        .timeout(const Duration(seconds: 15));
+    for (final url in _graphqlUrls) {
+      for (int attempt = 1; attempt <= 2; attempt++) {
+        try {
+          final response = await http
+              .post(
+                Uri.parse(url),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'query': query, 'variables': variables}),
+              )
+              .timeout(const Duration(seconds: 90));
 
-    if (response.statusCode != 200) {
-      throw ArweaveQueryException(
-          'GraphQL query failed: ${response.statusCode}');
-    }
+          if (response.statusCode != 200) break;
 
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final edges = (body['data']?['transactions']?['edges'] as List?) ?? [];
+          final body = jsonDecode(response.body) as Map<String, dynamic>;
+          if (body['errors'] != null) break;
 
-    final messages = <ArweaveMessage>[];
-    for (final edge in edges) {
-      final node = edge['node'] as Map<String, dynamic>;
-      final txId = node['id'] as String;
-      final tagList = (node['tags'] as List?) ?? [];
-      final tags = <String, String>{
-        for (final t in tagList)
-          (t['name'] as String): (t['value'] as String),
-      };
-      final blockTimestamp = node['block']?['timestamp'] as int?;
+          final data = body['data']?['transactions'];
+          if (data == null) break;
 
-      // Filter by timestamp client-side (GraphQL doesn't support block range filters).
-      if (afterTimestamp > 0 &&
-          blockTimestamp != null &&
-          blockTimestamp <= afterTimestamp) {
-        continue;
+          final edges = (data['edges'] as List?) ?? [];
+          final messages = <ArweaveMessage>[];
+          for (final edge in edges) {
+            final node = edge['node'] as Map<String, dynamic>;
+            final txId = node['id'] as String;
+            final tagList = (node['tags'] as List?) ?? [];
+            final tags = <String, String>{
+              for (final t in tagList)
+                (t['name'] as String): (t['value'] as String),
+            };
+            final blockTimestamp = node['block']?['timestamp'] as int?;
+
+            if (afterTimestamp > 0 &&
+                blockTimestamp != null &&
+                blockTimestamp <= afterTimestamp) {
+              continue;
+            }
+
+            messages.add(ArweaveMessage(
+              txId: txId,
+              tags: tags,
+              blockTimestamp: blockTimestamp,
+            ));
+          }
+          return messages;
+        } catch (_) {
+          if (attempt == 2) break;
+          await Future.delayed(const Duration(seconds: 2));
+        }
       }
-
-      messages.add(ArweaveMessage(
-        txId: txId,
-        tags: tags,
-        blockTimestamp: blockTimestamp,
-      ));
     }
-    return messages;
+    return [];
   }
 
-  /// Queries Arweave for the X25519 public key registration record belonging
-  /// to [ownerHash] (a hashed wallet address).
-  ///
-  /// Returns `null` if no registration exists yet.
-  /// Tries with App-Name filter first; falls back to Owner-Hash only for
-  /// keys registered before App-Name was added to the upload tags.
+  /// Queries Arweave for the X25519 public key registration record.
   Future<ArweaveMessage?> queryKeyRegistration(String ownerHash) async {
     const query = r'''
       query($tags: [TagFilter!]!) {
@@ -131,48 +121,56 @@ class ArweaveClient {
       }
     ''';
 
-    Future<ArweaveMessage?> _query(List<Map<String, dynamic>> tags) async {
-      final response = await http
-          .post(
-            Uri.parse(_graphqlUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'query': query, 'variables': {'tags': tags}}),
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) return null;
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final edges = (body['data']?['transactions']?['edges'] as List?) ?? [];
-      if (edges.isEmpty) return null;
-      final node = edges.first['node'] as Map<String, dynamic>;
-      final tagList = (node['tags'] as List?) ?? [];
-      return ArweaveMessage(
-        txId: node['id'] as String,
-        tags: {
-          for (final t in tagList)
-            (t['name'] as String): (t['value'] as String),
-        },
-      );
+    Future<ArweaveMessage?> _tryNode(String url, List<Map<String, dynamic>> tags) async {
+      try {
+        final response = await http
+            .post(
+              Uri.parse(url),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'query': query, 'variables': {'tags': tags}}),
+            )
+            .timeout(const Duration(seconds: 40));
+        if (response.statusCode != 200) return null;
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['errors'] != null) return null;
+        final edges = (body['data']?['transactions']?['edges'] as List?) ?? [];
+        if (edges.isEmpty) return null;
+        final node = edges.first['node'] as Map<String, dynamic>;
+        final tagList = (node['tags'] as List?) ?? [];
+        return ArweaveMessage(
+          txId: node['id'] as String,
+          tags: {
+            for (final t in tagList)
+              (t['name'] as String): (t['value'] as String),
+          },
+        );
+      } catch (_) {
+        return null;
+      }
     }
 
-    // Try with App-Name filter (keys registered with correct tags).
-    final result = await _query([
+    Future<ArweaveMessage?> _queryAllNodes(List<Map<String, dynamic>> tags) async {
+      for (final url in _graphqlUrls) {
+        final res = await _tryNode(url, tags);
+        if (res != null) return res;
+      }
+      return null;
+    }
+
+    final result = await _queryAllNodes([
       {'name': 'App-Name', 'values': [_appName]},
       {'name': 'Type', 'values': ['key_reg']},
       {'name': 'Owner-Hash', 'values': [ownerHash]},
     ]);
     if (result != null) return result;
 
-    // Fallback: keys registered before App-Name tag was added.
-    return _query([
+    return _queryAllNodes([
       {'name': 'Type', 'values': ['key_reg']},
       {'name': 'Owner-Hash', 'values': [ownerHash]},
     ]);
   }
 
   /// Fetches the raw bytes of an Arweave transaction by [txId].
-  ///
-  /// Tries the Irys gateway first (immediate availability after upload), then
-  /// falls back to arweave.net (available only after the bundle is mined).
   Future<Uint8List> fetchContent(String txId) async {
     final urls = [
       '$_irysGatewayUrl/$txId',
@@ -184,12 +182,11 @@ class ArweaveClient {
       try {
         final response = await http
             .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 20));
         if (response.statusCode == 200) {
           return response.bodyBytes;
         }
-        lastError = ArweaveQueryException(
-            'Content fetch $url → ${response.statusCode}');
+        lastError = 'HTTP ${response.statusCode} from $url';
       } catch (e) {
         lastError = e;
       }
@@ -199,7 +196,6 @@ class ArweaveClient {
   }
 }
 
-/// Thrown when an Arweave query or content fetch fails.
 class ArweaveQueryException implements Exception {
   final String message;
   const ArweaveQueryException(this.message);

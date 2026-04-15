@@ -32,8 +32,8 @@ class IrysClient {
   static const _prefSignPub = 'skr_shop_irys_sign_pub';
 
   /// Irys node that accepts Solana / Ed25519 signed data items.
-  static const _nodeUrl = 'https://uploader.irys.xyz';
-  static const _legacyNodeUrl = 'https://node2.irys.xyz';
+  static const _node1Url = 'https://node1.irys.xyz';
+  static const _node2Url = 'https://node2.irys.xyz';
 
   static final _ed25519 = Ed25519();
 
@@ -97,8 +97,8 @@ class IrysClient {
     debugPrint('[SKR-Irys] upload: data item size=${dataItem.length} bytes');
 
     final uploadUrls = [
-      '$_nodeUrl/upload/solana',
-      '$_legacyNodeUrl/tx/solana',
+      '$_node1Url/tx/solana',
+      '$_node2Url/tx/solana',
     ];
 
     IrysUploadException? lastError;
@@ -188,7 +188,11 @@ class IrysClient {
       data,
     ]);
 
-    final sig = await _ed25519.sign(signingData, keyPair: _signingKeyPair);
+    // THE CRITICAL FIX: The Irys SDK for Solana signs the HEX STRING ASCII BYTES 
+    // of the deepHash, not the raw bytes.
+    final signingDataHex = utf8.encode(_bytesToHex(signingData));
+
+    final sig = await _ed25519.sign(signingDataHex, keyPair: _signingKeyPair);
     final sigBytes = Uint8List.fromList(sig.bytes);
 
     final builder = BytesBuilder();
@@ -216,14 +220,21 @@ class IrysClient {
       final bytes = data is Uint8List ? data : Uint8List.fromList(data as List<int>);
       final tag = utf8.encode('blob');
       final length = utf8.encode(bytes.length.toString());
+      
+      // Arweave Deep Hash Leaf: sha384( sha384("blob" + len) + sha384(data) )
+      final tagHash = pkg_crypto.sha384.convert([...tag, ...length]).bytes;
+      final dataHash = pkg_crypto.sha384.convert(bytes).bytes;
       return Uint8List.fromList(
-        pkg_crypto.sha384.convert([...tag, ...length, ...bytes]).bytes,
+        pkg_crypto.sha384.convert([...tagHash, ...dataHash]).bytes,
       );
     }
 
     if (data is List) {
       final tag = utf8.encode('list');
       final length = utf8.encode(data.length.toString());
+      
+      // Arweave Deep Hash List: sha384( sha384("list" + len) ) -> acc
+      // Then fold: acc = sha384( acc + deepHash(item) )
       var acc = Uint8List.fromList(
         pkg_crypto.sha384.convert([...tag, ...length]).bytes,
       );
@@ -268,8 +279,12 @@ class IrysClient {
   }
 
   // ---------------------------------------------------------------------------
-  // Little-endian helpers
+  // Helpers
   // ---------------------------------------------------------------------------
+
+  static String _bytesToHex(Uint8List bytes) {
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
 
   static Uint8List _uint16LE(int value) {
     return Uint8List(2)

@@ -21,24 +21,18 @@ class IrysTag {
 ///
 /// ### Upload flow
 /// 1. A dedicated **Ed25519 signing keypair** is generated once and stored in
-///    [SharedPreferences]. This is separate from the user's Solana wallet —
-///    no MWA approval is required for each message.
-/// 2. Each upload is formatted as an **ANS-104 data item** (the Arweave bundle
-///    spec) signed with the Ed25519 key (Irys signature type 3 = Solana).
-/// 3. Tags are **Avro-encoded** inside the data item as per the ANS-104 spec.
+///    [SharedPreferences]. This is separate from the user's Solana wallet.
+/// 2. Each upload is formatted as an **ANS-104 data item** signed with Ed25519
+///    (Irys signature type 4 = Solana/Ed25519).
+/// 3. Tags are **Avro-encoded** inside the data item per the ANS-104 spec.
 /// 4. The signed data item is POSTed to a public Irys node.
-///    Response: `{ "id": "<arweave_tx_id>" }`.
-///
-/// The returned `txId` can be fetched immediately via
-/// `https://arweave.net/<txId>` from the Irys gateway.
 class IrysClient {
   static const _prefSignPriv = 'skr_chat_irys_sign_priv';
   static const _prefSignPub = 'skr_chat_irys_sign_pub';
 
-  /// Irys node that accepts Solana / Ed25519 signed data items.
-  /// Primary: new uploader node. Fallback: legacy node2.
-  static const _nodeUrl = 'https://uploader.irys.xyz';
-  static const _legacyNodeUrl = 'https://node2.irys.xyz';
+  /// Irys nodes that accept Solana / Ed25519 signed data items.
+  static const _node1Url = 'https://node1.irys.xyz';
+  static const _node2Url = 'https://node2.irys.xyz';
 
   static final _ed25519 = Ed25519();
 
@@ -51,7 +45,6 @@ class IrysClient {
   // Initialisation
   // ---------------------------------------------------------------------------
 
-  /// Loads or creates the persistent Ed25519 signing keypair.
   static Future<IrysClient> init() async {
     final prefs = await SharedPreferences.getInstance();
     final privB64 = prefs.getString(_prefSignPriv);
@@ -80,18 +73,12 @@ class IrysClient {
   // Public upload API
   // ---------------------------------------------------------------------------
 
-  /// Uploads [data] with [tags] to Arweave via Irys.
-  ///
-  /// Tries the primary uploader node (`/upload/solana`), then falls back to
-  /// the legacy node (`/tx/solana`). Returns the Arweave transaction ID.
-  /// Throws [IrysUploadException] on HTTP or signing errors.
   Future<String> upload(Uint8List data, List<IrysTag> tags) async {
     final dataItem = await _buildDataItem(data, tags);
 
-    // Try new uploader endpoint first, then legacy node as fallback.
     final uploadUrls = [
-      '$_nodeUrl/upload/solana',
-      '$_legacyNodeUrl/tx/solana',
+      '$_node1Url/tx/solana',
+      '$_node2Url/tx/solana',
     ];
 
     IrysUploadException? lastError;
@@ -132,7 +119,7 @@ class IrysClient {
         continue;
       }
 
-      // Other 4xx = client/format error — stop, other nodes will reject too.
+      // Other 4xx = client/format error — stop.
       if (response.statusCode >= 400 && response.statusCode < 500) {
         throw IrysUploadException(
           'Irys rejected upload at $url (${response.statusCode}): ${response.body}',
@@ -154,53 +141,32 @@ class IrysClient {
   // ANS-104 data item builder
   // ---------------------------------------------------------------------------
 
-  /// Builds a signed ANS-104 data item for Irys with Ed25519 / Solana
-  /// signature type (type 4).
-  ///
-  /// Layout:
-  /// ```
-  /// [2B  LE] signature type  = 4  (Solana/Ed25519)
-  /// [64B   ] Ed25519 signature
-  /// [32B   ] owner public key
-  /// [1B    ] target presence  = 0 (no target)
-  /// [1B    ] anchor presence  = 0 (no anchor)
-  /// [8B  LE] tag count
-  /// [8B  LE] tag byte count
-  /// [NB    ] Avro-encoded tags
-  /// [MB    ] data
-  /// ```
-  Future<Uint8List> _buildDataItem(
-    Uint8List data,
-    List<IrysTag> tags,
-  ) async {
-    // Signature type 4 = Solana (Ed25519, 64-byte sig + 32-byte owner) in the
-    // current arbundles spec used by Irys nodes. Type 3 is Ethereum (secp256k1,
-    // 65+65 bytes) and causes the parser to compute the wrong tags offset,
-    // which makes tags_size appear astronomically large → "Tags are too large".
-    const sigType = 4; // Solana / Ed25519
+  Future<Uint8List> _buildDataItem(Uint8List data, List<IrysTag> tags) async {
+    const sigType = 4;
     final tagsAvro = _encodeTagsAvro(tags);
 
-    // Build signing message via deepHash.
     final signingData = _deepHash([
       utf8.encode('dataitem'),
       utf8.encode('1'),
       utf8.encode(sigType.toString()),
-      _signingPublicKeyBytes, // owner
+      _signingPublicKeyBytes,
       Uint8List(0), // target (empty)
       Uint8List(0), // anchor (empty)
       tagsAvro,
       data,
     ]);
 
-    // Sign with Ed25519.
-    final sig = await _ed25519.sign(signingData, keyPair: _signingKeyPair);
+    // THE CRITICAL FIX: The Irys SDK for Solana signs the HEX STRING ASCII BYTES 
+    // of the deepHash, not the raw bytes.
+    final signingDataHex = utf8.encode(_bytesToHex(signingData));
+
+    final sig = await _ed25519.sign(signingDataHex, keyPair: _signingKeyPair);
     final sigBytes = Uint8List.fromList(sig.bytes);
 
-    // Assemble data item bytes.
     final builder = BytesBuilder();
     builder.add(_uint16LE(sigType));
-    builder.add(sigBytes); // 64 bytes
-    builder.add(_signingPublicKeyBytes); // 32 bytes
+    builder.add(sigBytes);
+    builder.add(_signingPublicKeyBytes);
     builder.addByte(0); // no target
     builder.addByte(0); // no anchor
     builder.add(_uint64LE(tags.length));
@@ -215,22 +181,16 @@ class IrysClient {
   // Arweave deepHash (SHA-384 based)
   // ---------------------------------------------------------------------------
 
-  /// Computes the Arweave deepHash of [data], which is either a [Uint8List]
-  /// (leaf) or a [List] of recursively hashable items.
-  ///
-  /// ```
-  /// deepHash(bytes)  = SHA-384("blob" || len(bytes).toString() || bytes)
-  /// deepHash(list)   = fold over items:
-  ///     acc = SHA-384("list" || len(list).toString())
-  ///     for each item: acc = SHA-384(acc || deepHash(item))
-  /// ```
   static Uint8List _deepHash(dynamic data) {
     if (data is Uint8List || data is List<int>) {
       final bytes = data is Uint8List ? data : Uint8List.fromList(data as List<int>);
       final tag = utf8.encode('blob');
       final length = utf8.encode(bytes.length.toString());
+      
+      final tagHash = pkg_crypto.sha384.convert([...tag, ...length]).bytes;
+      final dataHash = pkg_crypto.sha384.convert(bytes).bytes;
       return Uint8List.fromList(
-        pkg_crypto.sha384.convert([...tag, ...length, ...bytes]).bytes,
+        pkg_crypto.sha384.convert([...tagHash, ...dataHash]).bytes,
       );
     }
 
@@ -256,10 +216,6 @@ class IrysClient {
   // Avro tag encoding (ANS-104 spec)
   // ---------------------------------------------------------------------------
 
-  /// Encodes [tags] using the Apache Avro binary format required by ANS-104.
-  ///
-  /// Each tag is a `{name: bytes, value: bytes}` record. The array is prefixed
-  /// with a zigzag-encoded element count and terminated with a 0 byte.
   static Uint8List _encodeTagsAvro(List<IrysTag> tags) {
     final buf = <int>[];
     _writeZigzag(buf, tags.length);
@@ -275,7 +231,6 @@ class IrysClient {
     return Uint8List.fromList(buf);
   }
 
-  /// Writes [value] as an Avro zigzag-encoded variable-length integer.
   static void _writeZigzag(List<int> buf, int value) {
     int n = (value << 1) ^ (value >> 63);
     while ((n & ~0x7F) != 0) {
@@ -286,8 +241,12 @@ class IrysClient {
   }
 
   // ---------------------------------------------------------------------------
-  // Little-endian helpers
+  // Helpers
   // ---------------------------------------------------------------------------
+
+  static String _bytesToHex(Uint8List bytes) {
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
 
   static Uint8List _uint16LE(int value) {
     return Uint8List(2)
