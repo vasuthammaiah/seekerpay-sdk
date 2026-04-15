@@ -7,6 +7,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
 import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:go_router/go_router.dart';
 import 'currency_converter.dart';
 import 'local_llm_service.dart';
 import 'mrp_data.dart';
@@ -46,26 +47,76 @@ class _MrpScanSheetState extends ConsumerState<MrpScanSheet> {
 
 
   Future<bool> _showConfigAlert() async {
-    return await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('AI Not Configured', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Please configure either the Local LLM or Anthropic API key in settings to scan labels for accurate results.',
-          style: TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL', style: TextStyle(color: Colors.white38))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black),
-            child: const Text('PROCEED ANYWAY'),
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF111111),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.auto_awesome_rounded, color: _kPrimary, size: 32),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'AI NOT CONFIGURED',
+                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Please configure either the Local LLM or Anthropic API key in settings to scan labels for accurate results.',
+                style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, 'cancel'),
+                      child: const Text('CANCEL', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, 'configure'),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, foregroundColor: Colors.white, elevation: 0),
+                      child: const Text('CONFIGURE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context, 'proceed'),
+                  style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black, elevation: 0),
+                  child: const Text('PROCEED ANYWAY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    ) ?? false;
+    );
+
+    if (result == 'configure') {
+      if (mounted) {
+        context.push('/shop-config');
+      }
+      return false;
+    }
+    return result == 'proceed';
   }
+
   Future<void> _capture() async {
     if (_controller == null) return;
     final isLlmInstalled = await LocalLlmService.isModelDownloaded();

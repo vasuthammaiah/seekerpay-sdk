@@ -3,11 +3,13 @@ import 'mrp_ai_reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'order_model.dart';
 import 'order_notifier.dart';
 import 'product_scan_notifier.dart';
 import 'product_scan_sheet.dart';
 import 'mrp_scan_sheet.dart';
+
 const _kPrimary = Color(0xFFFFEB3B);
 const _kCard = Color(0xFF1A1A1A);
 
@@ -33,12 +35,14 @@ class OrderCartSheet extends ConsumerWidget {
   }) {
     return showModalBottomSheet(
       context: context,
-        builder: (context) => ProviderScope(
-          overrides: [
-            productScanProvider.overrideWith(ProductScanNotifier.new),
-          ],
-          child: OrderCartSheet(skrPerUsd: skrPerUsd, onPay: onPay),
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ProviderScope(
+        overrides: [
+          productScanProvider.overrideWith(ProductScanNotifier.new),
+        ],
+        child: OrderCartSheet(skrPerUsd: skrPerUsd, onPay: onPay),
+      ),
     );
   }
 
@@ -198,7 +202,6 @@ class OrderCartSheet extends ConsumerWidget {
               skrPerUsd: skrPerUsd,
               onPay: () {
                 Navigator.of(context).pop();
-                
                 onPay(order.totalUsd, skrBaseUnits);
               },
             ),
@@ -209,24 +212,75 @@ class OrderCartSheet extends ConsumerWidget {
     );
   }
 
-
-  Future<bool> _showConfigAlert(BuildContext context, String title, String msg) async {
-    return await showDialog<bool>(
+  Future<bool> _showConfigAlert(BuildContext context, String title, String msg, {IconData icon = Icons.warning_amber_rounded}) async {
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        content: Text(msg, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL', style: TextStyle(color: Colors.white38))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black),
-            child: const Text('PROCEED'),
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF111111),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), shape: BoxShape.circle),
+                child: Icon(icon, color: _kPrimary, size: 32),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title.toUpperCase(),
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                msg,
+                style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, 'cancel'),
+                      child: const Text('CANCEL', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, 'configure'),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, foregroundColor: Colors.white, elevation: 0),
+                      child: const Text('CONFIGURE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context, 'proceed'),
+                  style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black, elevation: 0),
+                  child: const Text('PROCEED ANYWAY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    ) ?? false;
+    );
+
+    if (result == 'configure') {
+      if (context.mounted) {
+        context.push('/shop-config');
+      }
+      return false;
+    }
+    return result == 'proceed';
   }
 
   Future<void> _openScanner(BuildContext context, WidgetRef ref) async {
@@ -238,7 +292,8 @@ class OrderCartSheet extends ConsumerWidget {
       final proceed = await _showConfigAlert(
         context, 
         'Barcode Lookup', 
-        'BarcodeLookup API key is not configured. The app will use the free Open Food Facts fallback, but results may be limited.'
+        'BarcodeLookup API key is not configured. The app will use the free Open Food Facts fallback, but results may be limited.',
+        icon: Icons.qr_code_scanner_rounded,
       );
       if (!proceed) return;
     }
@@ -259,7 +314,8 @@ class OrderCartSheet extends ConsumerWidget {
       final proceed = await _showConfigAlert(
         context, 
         'AI Not Configured', 
-        'Please configure either the Local LLM or Anthropic API key in settings to scan labels for accurate results.'
+        'Please configure either the Local LLM or Anthropic API key in settings to scan labels for accurate results.',
+        icon: Icons.auto_awesome_rounded,
       );
       if (!proceed) return;
     }
@@ -327,7 +383,6 @@ class _OrderItemTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Product image or icon
           if (item.product.imageUrl != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -344,7 +399,6 @@ class _OrderItemTile extends StatelessWidget {
 
           const SizedBox(width: 12),
 
-          // Name + brand
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,7 +425,6 @@ class _OrderItemTile extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(height: 6),
-                // Qty stepper
                 Row(
                   children: [
                     _QtyButton(icon: Icons.remove_rounded, onTap: onDecrement),
@@ -395,7 +448,6 @@ class _OrderItemTile extends StatelessWidget {
 
           const SizedBox(width: 12),
 
-          // Price + remove
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -464,8 +516,6 @@ class _QtyButton extends StatelessWidget {
   }
 }
 
-// ─── Bottom total bar ─────────────────────────────────────────────────────────
-
 class _BottomTotal extends StatelessWidget {
   final Order order;
   final String? skrDisplay;
@@ -489,7 +539,6 @@ class _BottomTotal extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Totals row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -546,7 +595,6 @@ class _BottomTotal extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Pay button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
