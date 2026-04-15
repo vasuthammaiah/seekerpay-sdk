@@ -225,7 +225,7 @@ class OrderCartSheet extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: _kPrimary.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: _kPrimary, size: 32),
               ),
               const SizedBox(height: 20),

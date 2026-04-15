@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import "dart:typed_data";
 
 import 'package:crypto/crypto.dart' as pkg_crypto;
 import 'package:cryptography/cryptography.dart';

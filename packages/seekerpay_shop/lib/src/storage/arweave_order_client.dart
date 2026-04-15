@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -61,8 +60,6 @@ class ArweaveOrderClient {
       ],
     };
 
-    Object? lastError;
-
     for (final url in _graphqlUrls) {
       for (int attempt = 1; attempt <= 2; attempt++) {
         debugPrint('[SKR-Arweave/Client] queryOrders: POST $url (attempt $attempt) ownerHash=$ownerHash');
@@ -75,10 +72,7 @@ class ArweaveOrderClient {
               )
               .timeout(const Duration(seconds: 90));
 
-          if (response.statusCode != 200) {
-            lastError = 'HTTP ${response.statusCode}';
-            break;
-          }
+          if (response.statusCode != 200) break;
 
           final body = jsonDecode(response.body) as Map<String, dynamic>;
           
@@ -86,25 +80,16 @@ class ArweaveOrderClient {
             final errors = body['errors'] as List;
             final msg = errors.isNotEmpty ? errors[0]['message'] : 'Unknown GraphQL error';
             debugPrint('[SKR-Arweave/Client] queryOrders: ❌ GraphQL error from $url: $msg');
-            lastError = msg;
             break; 
           }
 
           final data = body['data']?['transactions'];
-          if (data == null) {
-            lastError = 'No data';
-            break;
-          }
+          if (data == null) break;
 
           final edges = (data['edges'] as List?) ?? [];
           debugPrint('[SKR-Arweave/Client] queryOrders: ✅ found ${edges.length} edges from $url');
 
-          if (edges.isEmpty) {
-            lastError = 'Empty results';
-            // Even if empty, maybe another node has it indexed? 
-            // node1 and arweave.net are currently out-of-sync with uploader.
-            break; 
-          }
+          if (edges.isEmpty) break; 
 
           final records = <ArweaveOrderRecord>[];
           for (final edge in edges) {
@@ -123,15 +108,12 @@ class ArweaveOrderClient {
           return records;
         } catch (e) {
           debugPrint('[SKR-Arweave/Client] queryOrders: ❌ Exception from $url: $e');
-          lastError = e;
           if (attempt == 2) break;
           await Future.delayed(const Duration(seconds: 2));
         }
       }
     }
 
-    // If we've reached here, all nodes failed or returned empty.
-    // In retrieval after uninstall, returning empty list is "success" but user gets 0 orders.
     return [];
   }
 
