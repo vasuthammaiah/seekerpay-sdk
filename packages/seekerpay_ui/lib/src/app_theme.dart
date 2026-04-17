@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// Uses a pure monochromatic dark base with vibrant accent colours for icons.
 class AppColors {
   // Pure Monochromatic Theme
-  static const Color background = Color(0xFF0D0014); // Very Dark Purple
+  static const Color background = Color(0xFF000000); // Absolute Black
   static const Color surface = Color(0xFF121212); // Near Black Surface
   static const Color card = Color(0xFF1C1C1E); // Dark Grey Card
   
@@ -128,7 +128,7 @@ class AppTheme {
     ),
 
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.black,
       selectedItemColor: AppColors.primary,
       unselectedItemColor: AppColors.textSecondary,
       type: BottomNavigationBarType.fixed,
