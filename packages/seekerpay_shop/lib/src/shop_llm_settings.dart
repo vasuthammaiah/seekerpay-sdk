@@ -14,7 +14,7 @@ enum _Step { download, validate, initialize, ready }
 enum _StepStatus { idle, running, ok, failed }
 
 class _ShopLlmSettingsState extends State<ShopLlmSettings> {
-  static const _kPrimary = Color(0xFFFFEB3B), _kSurface = Color(0xFF1A1A1A), _kRed = Color(0xFFFF5252), _kGreen = Color(0xFF00E676);
+  static const _kPrimary = Color(0xFFFFEB3B), _kSurface = Colors.transparent, _kRed = Color(0xFFFF5252), _kGreen = Color(0xFF00E676);
   bool _enabled = false;
   final _status = <_Step, _StepStatus>{ _Step.download: _StepStatus.idle, _Step.validate: _StepStatus.idle, _Step.initialize: _StepStatus.idle, _Step.ready: _StepStatus.idle };
   final _detail = <_Step, String>{};
@@ -168,10 +168,10 @@ class _ShopLlmSettingsState extends State<ShopLlmSettings> {
               ),
             ],
             const SizedBox(height: 12),
-            TextField(controller: _playgroundCtrl, style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 3, decoration: InputDecoration(hintText: 'Enter sample label text to test AI...', hintStyle: const TextStyle(color: Colors.white24, fontSize: 12), filled: true, fillColor: Colors.white.withValues(alpha:0.03), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none))),
+            TextField(controller: _playgroundCtrl, style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 3, decoration: InputDecoration(hintText: 'Enter sample label text to test AI...', hintStyle: const TextStyle(color: Colors.white24, fontSize: 12), filled: true, fillColor: Colors.white.withValues(alpha:0.04), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none))),
             const SizedBox(height: 10),
             _ActionButton(label: _playgroundLoading ? 'AI ANALYZING...' : 'SEND TO AI', icon: Icons.send_rounded, color: _kPrimary, onTap: _playgroundLoading ? () {} : _sendPlaygroundPrompt),
-            if (_playgroundResponse != null) ...[ const SizedBox(height: 12), Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white10)), child: SelectableText(_playgroundResponse!, style: const TextStyle(color: _kGreen, fontSize: 11, fontFamily: 'monospace'))) ],
+            if (_playgroundResponse != null) ...[ const SizedBox(height: 12), Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.08))), child: SelectableText(_playgroundResponse!, style: const TextStyle(color: _kGreen, fontSize: 11, fontFamily: 'monospace'))) ],
           ],
           if (_status[_Step.download] == _StepStatus.ok) ...[ const SizedBox(height: 12), GestureDetector(onTap: _deleteModel, child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(border: Border.all(color: _kRed.withValues(alpha:0.3)), borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.delete_outline_rounded, color: _kRed, size: 14), SizedBox(width: 6), Text('DELETE MODEL', style: TextStyle(color: _kRed, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)) ]))) ]
         ])),
