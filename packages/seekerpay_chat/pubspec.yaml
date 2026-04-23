@@ -5,9 +5,8 @@ topics:
   - solana
   - chat
   - blockchain
-  - wallet
-  - web3
   - arweave
+  - web3
 homepage: https://github.com/vasuthammaiah/spay-sdk
 repository: https://github.com/vasuthammaiah/spay-sdk
 issue_tracker: https://github.com/vasuthammaiah/spay-sdk/issues
