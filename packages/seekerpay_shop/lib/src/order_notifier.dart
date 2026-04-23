@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'order_model.dart';
 import 'product_model.dart';
+import 'package:seekerpay_core/seekerpay_core.dart';
 
 class OrderNotifier extends Notifier<Order> {
   static const _storageKey = 'spay_current_order';
@@ -84,6 +85,11 @@ class OrderNotifier extends Notifier<Order> {
 
   void setDiscount(double usd) {
     state = state.copyWith(discountUsd: usd.clamp(0.0, state.subtotalUsd));
+    _saveToDisk();
+  }
+
+  void setToken(PaymentToken token) {
+    state = state.copyWith(token: token);
     _saveToDisk();
   }
 

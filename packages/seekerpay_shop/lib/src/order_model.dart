@@ -1,5 +1,6 @@
 import 'product_model.dart';
 import 'dart:math' as math;
+import 'package:seekerpay_core/seekerpay_core.dart';
 
 class OrderItem {
   final Product product;
@@ -39,6 +40,7 @@ class Order {
   final List<OrderItem> items;
   final String? signature;
   final double discountUsd;
+  final PaymentToken token;
 
   const Order({
     required this.id,
@@ -46,6 +48,7 @@ class Order {
     this.items = const [],
     this.signature,
     this.discountUsd = 0.0,
+    this.token = PaymentToken.skr,
   });
 
   double get subtotalUsd =>
@@ -76,13 +79,14 @@ class Order {
     return BigInt.from((amount * math.pow(10, decimals)).round());
   }
 
-  Order copyWith({String? id, DateTime? timestamp, List<OrderItem>? items, String? signature, double? discountUsd}) =>
+  Order copyWith({String? id, DateTime? timestamp, List<OrderItem>? items, String? signature, double? discountUsd, PaymentToken? token}) =>
       Order(
         id: id ?? this.id,
         timestamp: timestamp ?? this.timestamp,
         items: items ?? this.items,
         signature: signature ?? this.signature,
         discountUsd: discountUsd ?? this.discountUsd,
+        token: token ?? this.token,
       );
 
   Map<String, dynamic> toJson() => {
@@ -91,6 +95,7 @@ class Order {
         'items': items.map((i) => i.toJson()).toList(),
         'signature': signature,
         if (discountUsd > 0) 'discountUsd': discountUsd,
+        'token': token.index,
       };
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
@@ -101,5 +106,6 @@ class Order {
             .toList(),
         signature: json['signature'] as String?,
         discountUsd: (json['discountUsd'] as num?)?.toDouble() ?? 0.0,
+        token: json['token'] != null ? PaymentToken.values[json['token'] as int] : PaymentToken.skr,
       );
 }
