@@ -1,3 +1,9 @@
+## 1.4.0
+
+* Add native SOL payment support and multi-token utilities.
+* Improve NFC and Bluetooth transfer with auto-permissions and async helpers.
+* Fixes for reliable proximity-based transfers.
+
 ## 1.3.0
 
 * Add `deniedPermissions` and `locationDisabled` statuses to `NearbyStatus`.

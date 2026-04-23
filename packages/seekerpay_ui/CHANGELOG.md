@@ -1,3 +1,8 @@
+## 1.3.0
+
+* Add native SOL payment support and multi-token utilities.
+* Synchronize with seekerpay_core 1.3.0.
+
 ## 1.2.1
 
 - `AppColors.background` changed from black `#000000` to midnight purple `#110022` for unified dark theme.

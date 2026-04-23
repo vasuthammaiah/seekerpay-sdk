@@ -17,7 +17,7 @@ Product lookup, catalog, and shop utilities for the SeekerPay SDK.
 
 ```yaml
 dependencies:
-  seekerpay_shop: ^1.0.2
+  seekerpay_shop: ^1.1.0
 ```
 
 ## Usage

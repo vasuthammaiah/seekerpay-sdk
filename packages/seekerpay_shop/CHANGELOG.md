@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+* Add native SOL payment support and multi-token utilities.
+* Enhance Order model and notifier with multi-token persistence.
+* Synchronize with seekerpay_core 1.3.0.
+
 ## 1.0.5
 
 - **UI**: Shop config tiles (`ShopLlmSettings`, `ClaudeVisionSettings`) — replaced yellow accent with white, transparent card backgrounds, consistent input fills and switch colors for dark purple shop mode theme.

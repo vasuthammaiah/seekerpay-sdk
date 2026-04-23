@@ -5,7 +5,7 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Solana](https://img.shields.io/badge/Solana-Mainnet-9945FF?logo=solana)](https://solana.com)
 
-The official open-source Flutter SDK for building Solana payment experiences on the **Seeker mobile platform** — supporting SKR token transfers, `.skr` / `.sol` domain resolution, Seeker Genesis Token verification, NFC tap-to-pay, Bluetooth P2P handoff, QR payments, and group bill splitting.
+The official open-source Flutter SDK for building Solana payment experiences on the **Seeker mobile platform** — supporting SKR token transfers, `.skr` / `.sol` domain resolution, Seeker Genesis Token verification, NFC tap-to-pay, Bluetooth P2P handoff, QR payments, group bill splitting, and on-chain encrypted chat.
 
 ---
 
@@ -13,13 +13,15 @@ The official open-source Flutter SDK for building Solana payment experiences on 
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| [`seekerpay_core`](./packages/seekerpay_core) | 1.1.1 | Solana RPC, wallet adapter, SKR payments, activity history |
-| [`seekerpay_domains`](./packages/seekerpay_domains) | 1.1.0 | `.skr` and `.sol` domain resolution, Seeker Genesis verification |
-| [`seekerpay_qr`](./packages/seekerpay_qr) | 1.1.0 | Solana Pay-compatible QR code generation and decoding |
-| [`seekerpay_ui`](./packages/seekerpay_ui) | 1.1.0 | Dark theme, `PaymentPreviewSheet`, NFC pulse animation |
-| [`seekerpay_nfc`](./packages/seekerpay_nfc) | 1.1.0 | NFC tap-to-pay via NDEF payloads |
-| [`seekerpay_bluetooth`](./packages/seekerpay_bluetooth) | 1.1.0 | P2P payment handoff via Google Nearby Connections |
-| [`seekerpay_split`](./packages/seekerpay_split) | 1.1.0 | Group bill splitting with on-chain payment verification |
+| [`seekerpay_core`](./packages/seekerpay_core) | 1.3.0 | Solana RPC, wallet adapter, SKR/SOL payments, activity history |
+| [`seekerpay_domains`](./packages/seekerpay_domains) | 1.3.0 | `.skr` and `.sol` domain resolution, Seeker Genesis verification |
+| [`seekerpay_qr`](./packages/seekerpay_qr) | 1.3.0 | Solana Pay-compatible QR code generation and decoding |
+| [`seekerpay_ui`](./packages/seekerpay_ui) | 1.3.0 | Dark theme, `PaymentPreviewSheet`, NFC pulse animation |
+| [`seekerpay_nfc`](./packages/seekerpay_nfc) | 1.4.0 | NFC tap-to-pay via NDEF payloads |
+| [`seekerpay_bluetooth`](./packages/seekerpay_bluetooth) | 1.4.0 | P2P payment handoff via Google Nearby Connections |
+| [`seekerpay_split`](./packages/seekerpay_split) | 1.3.0 | Group bill splitting with on-chain payment verification |
+| [`seekerpay_chat`](./packages/seekerpay_chat) | 1.1.0 | End-to-end encrypted, on-chain (Arweave/Irys) chat |
+| [`seekerpay_shop`](./packages/seekerpay_shop) | 1.1.0 | Product catalog, AI-powered MRP scanning, and shop utilities |
 
 ---
 
@@ -27,24 +29,13 @@ The official open-source Flutter SDK for building Solana payment experiences on 
 
 ### 1. Add dependencies
 
-All packages live in this monorepo. Reference them by path in your `pubspec.yaml`:
+Add the SeekerPay packages you need to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  seekerpay_core:
-    path: ./seekerpay-sdk/packages/seekerpay_core
-  seekerpay_domains:
-    path: ./seekerpay-sdk/packages/seekerpay_domains
-  seekerpay_qr:
-    path: ./seekerpay-sdk/packages/seekerpay_qr
-  seekerpay_ui:
-    path: ./seekerpay-sdk/packages/seekerpay_ui
-  seekerpay_nfc:
-    path: ./seekerpay-sdk/packages/seekerpay_nfc
-  seekerpay_bluetooth:
-    path: ./seekerpay-sdk/packages/seekerpay_bluetooth
-  seekerpay_split:
-    path: ./seekerpay-sdk/packages/seekerpay_split
+  seekerpay_core: ^1.3.0
+  seekerpay_ui: ^1.3.0
+  # Add other packages as needed
 ```
 
 ### 2. Configure the wallet identity
@@ -186,6 +177,13 @@ Please ensure all public APIs are documented with dartdoc comments.
 ## Author
 
 **Vasu Thammaiah** — [@vasuthammaiah](https://github.com/vasuthammaiah)
+
+---
+
+## License
+
+SeekerPay SDK is released under the [MIT License](./LICENSE).
+ammaiah)
 
 ---
 

@@ -20,7 +20,7 @@ Group bill splitting and on-chain payment verification for the SeekerPay SDK. Cr
 
 ```yaml
 dependencies:
-  seekerpay_split: ^1.2.0
+  seekerpay_split: ^1.3.0
 ```
 
 ---

@@ -1,6 +1,6 @@
 name: seekerpay_chat
 description: End-to-end encrypted, on-chain (Arweave/Irys) chat for SeekerPay .skr identities.
-version: 1.0.0
+version: 1.1.0
 topics:
   - solana
   - chat
@@ -19,12 +19,9 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.3.1
-  seekerpay_core:
-    path: ../seekerpay_core
-  seekerpay_domains:
-    path: ../seekerpay_domains
-  seekerpay_qr:
-    path: ../seekerpay_qr
+  seekerpay_core: ^1.3.0
+  seekerpay_domains: ^1.3.0
+  seekerpay_qr: ^1.3.0
   http: ^1.2.1
   sqflite: ^2.3.3+1
   path: ^1.9.0

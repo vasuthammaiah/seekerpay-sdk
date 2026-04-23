@@ -19,7 +19,7 @@ NFC tap-to-pay for the SeekerPay SDK. Writes Solana Pay URLs to NFC tags and rea
 
 ```yaml
 dependencies:
-  seekerpay_nfc: ^1.3.0
+  seekerpay_nfc: ^1.4.0
 ```
 
 ### Android setup

@@ -1,3 +1,8 @@
+## 1.3.0
+
+* Add native SOL payment support and multi-token utilities.
+* Synchronize with seekerpay_core 1.3.0.
+
 ## 1.2.0
 
 * Feature updates and internal improvements for the 1.2.0 release.

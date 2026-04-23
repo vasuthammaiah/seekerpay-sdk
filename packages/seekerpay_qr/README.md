@@ -19,7 +19,7 @@ Solana Pay-compatible QR code generation and URL decoding for the SeekerPay SDK.
 
 ```yaml
 dependencies:
-  seekerpay_qr: ^1.2.0
+  seekerpay_qr: ^1.3.0
   qr_flutter: ^4.1.0   # for QrImageView rendering
 ```
 

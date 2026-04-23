@@ -21,7 +21,7 @@ P2P payment handoff for the SeekerPay SDK using Google Nearby Connections. Enabl
 
 ```yaml
 dependencies:
-  seekerpay_bluetooth: ^1.3.0
+  seekerpay_bluetooth: ^1.4.0
 ```
 
 ### Android setup

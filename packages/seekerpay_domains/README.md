@@ -21,7 +21,7 @@ Domain name resolution and Seeker identity for the SeekerPay SDK. Supports `.skr
 
 ```yaml
 dependencies:
-  seekerpay_domains: ^1.2.0
+  seekerpay_domains: ^1.3.0
 ```
 
 ---

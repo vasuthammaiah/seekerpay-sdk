@@ -19,7 +19,7 @@ The official UI component library for the SeekerPay SDK — high-contrast dark t
 
 ```yaml
 dependencies:
-  seekerpay_ui: ^1.2.0
+  seekerpay_ui: ^1.3.0
 ```
 
 ---

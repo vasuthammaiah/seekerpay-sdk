@@ -1,7 +1,7 @@
-## 1.2.0
+## 1.3.0
 
-* Feature updates and internal improvements for the 1.2.0 release.
-* Update internal dependencies to versioned hosted source.
+* Add native SOL payment support and multi-token utilities.
+* Improve RPC client with better error handling and token support.
 
 ## 1.2.0
 

@@ -1,3 +1,8 @@
+## 1.3.0
+
+* Add native SOL payment support and multi-token utilities.
+* Synchronize with seekerpay_core 1.3.0.
+
 ## 1.2.1
 
 * Fix `SolanaPayUrl.encode()` to use RFC 3986 percent-encoding (`%20`) instead of
