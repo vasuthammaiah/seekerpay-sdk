@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:seekerpay_core/seekerpay_core.dart';
 import 'app_theme.dart';
+import 'dart:math' as math;
 
 /// A bottom-sheet widget that presents payment details to the user and lets
 /// them optionally enable offline-ready mode before confirming.
@@ -26,6 +27,11 @@ class _PaymentPreviewSheetState extends State<PaymentPreviewSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+    final token = widget.request.token;
+    final decimals = token.decimals;
+    final amount = widget.request.amount.toDouble() / math.pow(10, decimals);
+    final symbol = token.symbol;
+
     return Container(
       padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
       decoration: const BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
@@ -36,20 +42,20 @@ class _PaymentPreviewSheetState extends State<PaymentPreviewSheet> {
           const SizedBox(height: 24),
           _row('Recipient', widget.request.recipient.length > 20 ? '${widget.request.recipient.substring(0, 10)}...${widget.request.recipient.substring(widget.request.recipient.length - 10)}' : widget.request.recipient),
           const Divider(height: 32, color: Colors.white12),
-          _row('Amount', '${(widget.request.amount.toDouble() / 1000000).toStringAsFixed(2)} SKR'),
+          _row('Amount', '${amount.toStringAsFixed(decimals == 6 ? 2 : 4)} $symbol'),
           const Divider(height: 32, color: Colors.white12),
           _row('Network Fee', '≈ 0.000005 SOL'),
           const Divider(height: 32, color: Colors.white12),
-          _row('They receive', '${(widget.request.amount.toDouble() / 1000000).toStringAsFixed(2)} SKR'),
+          _row('They receive', '${amount.toStringAsFixed(decimals == 6 ? 2 : 4)} $symbol'),
           const SizedBox(height: 24),
           
           // Offline Mode Toggle
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: _offlineReady ? AppColors.orange.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
+              color: _offlineReady ? AppColors.orange.withOpacity(0.1) : Colors.white.withOpacity(0.03),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _offlineReady ? AppColors.orange.withValues(alpha: 0.3) : Colors.white12),
+              border: Border.all(color: _offlineReady ? AppColors.orange.withOpacity(0.3) : Colors.white12),
             ),
             child: Row(
               children: [
@@ -76,7 +82,7 @@ class _PaymentPreviewSheetState extends State<PaymentPreviewSheet> {
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
             child: const Row(
               children: [
                 Icon(Icons.lock_outline, size: 16, color: AppColors.primary),

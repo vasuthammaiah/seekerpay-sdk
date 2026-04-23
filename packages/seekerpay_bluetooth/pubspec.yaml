@@ -20,7 +20,8 @@ dependencies:
   flutter_riverpod: ^3.3.1
   nearby_connections: ^4.3.0
   permission_handler: ^11.3.1
-  seekerpay_core: ^1.2.0
+  seekerpay_core:
+    path: ../seekerpay_core
 
 dev_dependencies:
   flutter_test:

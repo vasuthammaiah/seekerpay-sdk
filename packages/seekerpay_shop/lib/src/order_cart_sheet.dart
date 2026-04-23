@@ -10,29 +10,40 @@ import 'product_model.dart';
 import 'product_scan_notifier.dart';
 import 'product_scan_sheet.dart';
 import 'mrp_scan_sheet.dart';
+import 'dart:math' as math;
 
 const _kPrimary = Color(0xFFFFEB3B);
 const _kCard = Color(0xFF1A1A1A);
 
 class OrderCartSheet extends ConsumerWidget {
-  /// USD price of 1 SKR token — used to show SKR equivalent total.
-  final double skrPerUsd;
+  /// USD price of 1 token unit.
+  final double tokenPriceUsd;
+
+  /// Display symbol of the token.
+  final String tokenSymbol;
+
+  /// Number of decimal places for the token.
+  final int tokenDecimals;
 
   /// Fired when owner taps "SET AMOUNT & PAY".
   /// [totalUsd] — order total in USD.
-  /// [totalSkr] — order total in SKR base units (6 decimals).
-  final void Function(double totalUsd, BigInt totalSkr) onPay;
+  /// [totalToken] — order total in token base units.
+  final void Function(double totalUsd, BigInt totalToken) onPay;
 
   const OrderCartSheet({
     super.key,
-    required this.skrPerUsd,
+    required this.tokenPriceUsd,
+    required this.tokenSymbol,
+    required this.tokenDecimals,
     required this.onPay,
   });
 
   static Future<void> show(
     BuildContext context, {
-    required double skrPerUsd,
-    required void Function(double totalUsd, BigInt totalSkr) onPay,
+    required double tokenPriceUsd,
+    required String tokenSymbol,
+    required int tokenDecimals,
+    required void Function(double totalUsd, BigInt totalToken) onPay,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -42,7 +53,12 @@ class OrderCartSheet extends ConsumerWidget {
         overrides: [
           productScanProvider.overrideWith(ProductScanNotifier.new),
         ],
-        child: OrderCartSheet(skrPerUsd: skrPerUsd, onPay: onPay),
+        child: OrderCartSheet(
+          tokenPriceUsd: tokenPriceUsd, 
+          tokenSymbol: tokenSymbol, 
+          tokenDecimals: tokenDecimals, 
+          onPay: onPay
+        ),
       ),
     );
   }
@@ -53,9 +69,9 @@ class OrderCartSheet extends ConsumerWidget {
     final notifier = ref.read(orderNotifierProvider.notifier);
     final screenH = MediaQuery.of(context).size.height;
 
-    final skrBaseUnits = order.toSkrBaseUnits(skrPerUsd);
-    final skrDisplay = skrPerUsd > 0
-        ? (skrBaseUnits.toDouble() / 1000000).toStringAsFixed(2)
+    final tokenBaseUnits = order.toTokenBaseUnits(tokenPriceUsd: tokenPriceUsd, decimals: tokenDecimals);
+    final tokenDisplay = tokenPriceUsd > 0
+        ? (tokenBaseUnits.toDouble() / math.pow(10, tokenDecimals)).toStringAsFixed(2)
         : null;
 
     return Container(
@@ -221,11 +237,11 @@ class OrderCartSheet extends ConsumerWidget {
           if (!order.isEmpty)
             _BottomTotal(
               order: order,
-              skrDisplay: skrDisplay,
-              skrPerUsd: skrPerUsd,
+              tokenDisplay: tokenDisplay,
+              tokenSymbol: tokenSymbol,
               onPay: () {
                 Navigator.of(context).pop();
-                onPay(order.totalUsd, skrBaseUnits);
+                onPay(order.totalUsd, tokenBaseUnits);
               },
               onDiscount: (usd) => notifier.setDiscount(usd),
             ),
@@ -264,7 +280,7 @@ class OrderCartSheet extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: _kPrimary.withValues(alpha: 0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: _kPrimary.withOpacity(0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: _kPrimary, size: 32),
               ),
               const SizedBox(height: 20),
@@ -417,7 +433,7 @@ class _OrderItemTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: _kCard,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -524,7 +540,7 @@ class _OrderItemTile extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: Colors.white.withOpacity(0.06),
         borderRadius: BorderRadius.circular(4),
       ),
       child: const Icon(Icons.inventory_2_rounded, color: Colors.white24, size: 22),
@@ -546,7 +562,7 @@ class _QtyButton extends StatelessWidget {
         width: 26,
         height: 26,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(icon, size: 14, color: Colors.white70),
@@ -557,15 +573,15 @@ class _QtyButton extends StatelessWidget {
 
 class _BottomTotal extends StatelessWidget {
   final Order order;
-  final String? skrDisplay;
-  final double skrPerUsd;
+  final String? tokenDisplay;
+  final String tokenSymbol;
   final VoidCallback onPay;
   final void Function(double discountUsd) onDiscount;
 
   const _BottomTotal({
     required this.order,
-    required this.skrDisplay,
-    required this.skrPerUsd,
+    required this.tokenDisplay,
+    required this.tokenSymbol,
     required this.onPay,
     required this.onDiscount,
   });
@@ -595,10 +611,10 @@ class _BottomTotal extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: order.hasDiscount ? Colors.green.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.04),
+                color: order.hasDiscount ? Colors.green.withOpacity(0.12) : Colors.white.withOpacity(0.04),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: order.hasDiscount ? Colors.green.withValues(alpha: 0.4) : Colors.white12,
+                  color: order.hasDiscount ? Colors.green.withOpacity(0.4) : Colors.white12,
                 ),
               ),
               child: Row(
@@ -681,13 +697,13 @@ class _BottomTotal extends StatelessWidget {
                   ),
                 ],
               ),
-              if (skrDisplay != null)
+              if (tokenDisplay != null)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text(
-                      'IN SKR',
-                      style: TextStyle(
+                    Text(
+                      'IN $tokenSymbol',
+                      style: const TextStyle(
                         color: Colors.white38,
                         fontSize: 9,
                         fontWeight: FontWeight.w900,
@@ -696,7 +712,7 @@ class _BottomTotal extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$skrDisplay SKR',
+                      '$tokenDisplay $tokenSymbol',
                       style: const TextStyle(
                         color: _kPrimary,
                         fontSize: 20,
@@ -911,7 +927,7 @@ class _DiscountDialogState extends State<_DiscountDialog> {
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color: Colors.white.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -1003,9 +1019,9 @@ class _ToggleBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.transparent,
+          color: active ? Colors.greenAccent.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: active ? Border.all(color: Colors.greenAccent.withValues(alpha: 0.5)) : null,
+          border: active ? Border.all(color: Colors.greenAccent.withOpacity(0.5)) : null,
         ),
         child: Text(
           label,

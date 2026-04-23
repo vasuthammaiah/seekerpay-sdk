@@ -52,8 +52,6 @@ class TransactionParser {
       }).toList();
 
       // Merge lookup-table resolved addresses (v0 transactions).
-      // meta.loadedAddresses has {writable: [...], readonly: [...]} — appended
-      // in that order after static keys, matching the accountIndex numbering.
       final loadedAddresses = meta['loadedAddresses'] as Map?;
       if (loadedAddresses != null) {
         final writable = loadedAddresses['writable'] as List? ?? [];
@@ -120,7 +118,6 @@ class TransactionParser {
               }
               skrActivity = true;
             } else {
-              // Potential counterparty — guard against lookup-table index overflow
               final owner = b['owner']?.toString();
               skrCounterparty = owner ??
                   (accountIdx < addresses.length ? addresses[accountIdx] : null);
@@ -131,45 +128,6 @@ class TransactionParser {
 
       final skrDiff = skrPost - skrPre;
       
-      // If no direct balance change detected, check instructions for SKR mentions
-      if (!skrActivity || skrDiff == BigInt.zero) {
-        final instructions = transaction['message']?['instructions'] as List? ?? [];
-        final innerInstructions = meta['innerInstructions'] as List? ?? [];
-        
-        bool foundSkrInIx = false;
-        for (final ix in instructions) {
-          if (ix is Map && ix['parsed'] != null) {
-            final info = ix['parsed']['info'];
-            if (info != null && (info['mint'] == SKRToken.mintAddress || info['source'] == SKRToken.mintAddress)) {
-              foundSkrInIx = true;
-              break;
-            }
-          }
-        }
-        
-        if (!foundSkrInIx) {
-          for (final inner in innerInstructions) {
-            final ixs = inner['instructions'] as List? ?? [];
-            for (final ix in ixs) {
-              if (ix is Map && ix['parsed'] != null) {
-                final info = ix['parsed']['info'];
-                if (info != null && (info['mint'] == SKRToken.mintAddress || info['source'] == SKRToken.mintAddress)) {
-                  foundSkrInIx = true;
-                  break;
-                }
-              }
-            }
-            if (foundSkrInIx) break;
-          }
-        }
-        
-        if (foundSkrInIx) {
-          skrActivity = true;
-          // Note: if diff is 0, it might be a complex tx where balance changes 
-          // are hidden or net zero in simple terms, but we still want to show it.
-        }
-      }
-
       if (skrActivity && skrDiff != BigInt.zero) {
         records.add(TransactionRecord(
           signature: signature,
@@ -181,12 +139,64 @@ class TransactionParser {
           decimals: SKRToken.decimals,
           mint: SKRToken.mintAddress,
         ));
-      } else if (skrActivity) {
-        // SKR mentioned but no net change (e.g. failed or complex)
-        // We might want to show it as SKR still, but for now we fall through
+        return records;
       }
 
-      // Only SKR token activity should be returned.
+      // --- 3. Check Native SOL Changes ---
+      final preBalances = meta['preBalances'] as List? ?? [];
+      final postBalances = meta['postBalances'] as List? ?? [];
+      
+      BigInt solPre = BigInt.zero;
+      BigInt solPost = BigInt.zero;
+      bool solActivity = false;
+      String? solCounterparty;
+
+      for (final idx in userIndices) {
+        if (idx < preBalances.length) {
+          solPre += BigInt.from(preBalances[idx]);
+          solActivity = true;
+        }
+        if (idx < postBalances.length) {
+          solPost += BigInt.from(postBalances[idx]);
+          solActivity = true;
+        }
+      }
+
+      final solDiff = solPost - solPre;
+      final fee = BigInt.from(meta['fee'] ?? 0);
+
+      // If sending SOL, the diff will be (amount + fee).
+      // We want to show the amount, so we add back the fee if it was the sender.
+      BigInt displaySolAmount = solDiff.abs();
+      if (solDiff < BigInt.zero) {
+        displaySolAmount = (solDiff + fee).abs();
+      }
+
+      // Identify SOL counterparty
+      if (solDiff != BigInt.zero) {
+        for (int i = 0; i < postBalances.length; i++) {
+          if (userIndices.contains(i)) continue;
+          final diff = BigInt.from(postBalances[i]) - BigInt.from(preBalances[i]);
+          if (diff.abs() == displaySolAmount) {
+            solCounterparty = i < addresses.length ? addresses[i] : null;
+            break;
+          }
+        }
+      }
+
+      // Only show SOL activity if it's significant (more than just a fee)
+      if (solActivity && displaySolAmount > BigInt.from(5000)) {
+        records.add(TransactionRecord(
+          signature: signature,
+          timestamp: timestamp,
+          amount: displaySolAmount,
+          type: solDiff > BigInt.zero ? TransactionType.receive : TransactionType.send,
+          counterparty: solCounterparty ?? 'Solana Transaction',
+          symbol: 'SOL',
+          decimals: 9,
+          mint: null,
+        ));
+      }
 
       return records;
     } catch (e) {

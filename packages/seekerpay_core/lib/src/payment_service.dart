@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show VoidCallback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -6,6 +7,8 @@ import 'package:solana_web3/solana_web3.dart' as web3;
 import 'dart:convert';
 import 'rpc_client.dart';
 import 'skr_token.dart';
+import 'payment_token.dart';
+import 'sol_transfer.dart';
 import 'mwa_client.dart';
 import 'confirmation_poller.dart';
 import 'pending_transaction_manager.dart';
@@ -63,17 +66,25 @@ class PaymentState {
   }
 }
 
-/// Parameters for a single SKR token payment.
+/// Parameters for a single token payment.
 class PaymentRequest {
   /// Base58 public key of the payment recipient.
   final String recipient;
 
-  /// Amount to send in SKR base units (1 SKR = 1,000,000 base units).
+  /// Amount to send in base units (e.g. lamports for SOL, 10^-6 for SKR).
   final BigInt amount;
+
+  /// The token being sent.
+  final PaymentToken token;
 
   /// Optional human-readable label for this payment.
   final String? label;
-  PaymentRequest({required this.recipient, required this.amount, this.label});
+  PaymentRequest({
+    required this.recipient, 
+    required this.amount, 
+    this.token = PaymentToken.skr,
+    this.label,
+  });
 }
 
 /// Confirmation record returned after a successful payment.
@@ -81,8 +92,11 @@ class PaymentReceipt {
   /// On-chain transaction signature.
   final String signature;
 
-  /// Amount transferred in SKR base units.
+  /// Amount transferred in base units.
   final BigInt amount;
+
+  /// The token that was sent.
+  final PaymentToken token;
 
   /// Base58 public key of the recipient.
   final String recipient;
@@ -92,10 +106,17 @@ class PaymentReceipt {
 
   /// `true` when the transaction was queued offline and not yet confirmed.
   final bool isPending;
-  PaymentReceipt({required this.signature, required this.amount, required this.recipient, required this.timestamp, this.isPending = false});
+  PaymentReceipt({
+    required this.signature, 
+    required this.amount, 
+    required this.token,
+    required this.recipient, 
+    required this.timestamp, 
+    this.isPending = false,
+  });
 }
 
-/// Riverpod [StateNotifier] that orchestrates the full SKR payment lifecycle:
+/// Riverpod [StateNotifier] that orchestrates the full payment lifecycle:
 /// balance check, transaction building, simulation, MWA signing, submission,
 /// and on-chain confirmation polling.
 ///
@@ -119,6 +140,7 @@ class PaymentService extends StateNotifier<PaymentState> {
       return PaymentReceipt(
         signature: signature,
         amount: request.amount,
+        token: request.token,
         recipient: request.recipient,
         timestamp: DateTime.now(),
         isPending: state.isOfflineReady,
@@ -127,7 +149,7 @@ class PaymentService extends StateNotifier<PaymentState> {
     return null;
   }
 
-  /// Executes a multi-recipient SKR payment in a single transaction.
+  /// Executes a multi-recipient payment in a single transaction.
   ///
   /// When [offlineReady] is `true` the signed transaction is stored locally
   /// for later submission and the method returns immediately after signing.
@@ -137,64 +159,86 @@ class PaymentService extends StateNotifier<PaymentState> {
     
     state = state.copyWith(status: PaymentStatus.building, multiRequests: requests, isOfflineReady: false);
     try {
+      final token = requests.first.token;
       final totalAmount = requests.fold(BigInt.zero, (sum, r) => sum + r.amount);
       
       // If we are definitely online, we do a pre-flight balance check.
-      // If offlineReady is true, we might be offline, so we skip or wrap in try-catch.
       try {
-        final currentBalance = await _rpcClient.getTokenAccountsByOwner(_payerAddress, SKRToken.mintAddress);
-        if (currentBalance < totalAmount) {
-          throw Exception('insufficient balance: You have ${(currentBalance.toDouble() / 1000000).toStringAsFixed(2)} SKR but need ${(totalAmount.toDouble() / 1000000).toStringAsFixed(2)} SKR');
+        if (token == PaymentToken.skr) {
+          final currentBalance = await _rpcClient.getTokenAccountsByOwner(_payerAddress, SKRToken.mintAddress);
+          if (currentBalance < totalAmount) {
+            throw Exception('insufficient balance: You have ${(currentBalance.toDouble() / 1000000).toStringAsFixed(2)} SKR but need ${(totalAmount.toDouble() / 1000000).toStringAsFixed(2)} SKR');
+          }
+        } else {
+          final currentBalance = await _rpcClient.getBalance(_payerAddress);
+          // Reserve 0.002 SOL for fees
+          const reserve = 2000000; // 0.002 SOL in lamports
+          if (currentBalance < (totalAmount + BigInt.from(reserve))) {
+             throw Exception('insufficient balance: You have ${(currentBalance.toDouble() / 1e9).toStringAsFixed(4)} SOL but need ${((totalAmount + BigInt.from(reserve)).toDouble() / 1e9).toStringAsFixed(4)} SOL (including 0.002 fee reserve)');
+          }
         }
-      } catch (e, st) { print('PaymentService Error: $e'); print(st);
+      } catch (e) {
         if (!offlineReady) rethrow;
-        // If offlineReady, we continue anyway and let simulation or signing proceed
       }
 
       final blockhash = await _rpcClient.getLatestBlockhash().catchError((e) {
-        if (offlineReady) return '11111111111111111111111111111111'; // Dummy if offline, but real apps should cache last known blockhash
+        if (offlineReady) return '11111111111111111111111111111111';
         throw e;
       });
 
-      final mintPubkey = web3.Pubkey.fromBase58(SKRToken.mintAddress.trim());
-      final List<MultiTransfer> transfers = [];
-      
-      for (final req in requests) {
-        final String recipient = req.recipient.trim();
-        web3.Pubkey recipientPubkey = web3.Pubkey.fromBase58(recipient);
-
-        final List<List<int>> seeds = [
-          recipientPubkey.toBytes(),
-          web3.Pubkey.fromBase58('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBytes(),
-          mintPubkey.toBytes(),
-        ];
-        final recipientATA = web3.Pubkey.findProgramAddress(
-          seeds, 
-          web3.Pubkey.fromBase58('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-        ).pubkey;
+      Uint8List txBytes;
+      if (token == PaymentToken.skr) {
+        final mintPubkey = web3.Pubkey.fromBase58(SKRToken.mintAddress.trim());
+        final List<MultiTransfer> transfers = [];
         
-        bool needsATA = true;
-        try {
-          final ataInfo = await _rpcClient.getAccountInfo(recipientATA.toBase58());
-          needsATA = ataInfo == null;
-        } catch (_) {
-          // If offline, assume we might need to create it or skip if we're not sure
-          if (!offlineReady) rethrow;
+        for (final req in requests) {
+          final String recipient = req.recipient.trim();
+          web3.Pubkey recipientPubkey = web3.Pubkey.fromBase58(recipient);
+
+          final List<List<int>> seeds = [
+            recipientPubkey.toBytes(),
+            web3.Pubkey.fromBase58('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBytes(),
+            mintPubkey.toBytes(),
+          ];
+          final recipientATA = web3.Pubkey.findProgramAddress(
+            seeds, 
+            web3.Pubkey.fromBase58('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+          ).pubkey;
+          
+          bool needsATA = true;
+          try {
+            final ataInfo = await _rpcClient.getAccountInfo(recipientATA.toBase58());
+            needsATA = ataInfo == null;
+          } catch (_) {
+            if (!offlineReady) rethrow;
+          }
+
+          transfers.add(MultiTransfer(
+            recipient: recipient,
+            amount: req.amount,
+            needsATA: needsATA,
+          ));
         }
 
-        transfers.add(MultiTransfer(
-          recipient: recipient,
-          amount: req.amount,
-          needsATA: needsATA,
-        ));
-      }
+        txBytes = await SplTokenTransfer.buildMulti(
+          payer: _payerAddress.trim(), 
+          transfers: transfers,
+          mint: SKRToken.mintAddress.trim(), 
+          blockhash: blockhash,
+        );
+      } else {
+        // Native SOL
+        final List<SolMultiTransfer> transfers = requests.map((r) => SolMultiTransfer(
+          recipient: r.recipient,
+          amount: r.amount,
+        )).toList();
 
-      final txBytes = await SplTokenTransfer.buildMulti(
-        payer: _payerAddress.trim(), 
-        transfers: transfers,
-        mint: SKRToken.mintAddress.trim(), 
-        blockhash: blockhash,
-      );
+        txBytes = await SolTransfer.buildMulti(
+          payer: _payerAddress.trim(),
+          transfers: transfers,
+          blockhash: blockhash,
+        );
+      }
 
       if (!offlineReady) {
         state = state.copyWith(status: PaymentStatus.simulating);
@@ -204,13 +248,11 @@ class PaymentService extends StateNotifier<PaymentState> {
 
       state = state.copyWith(status: PaymentStatus.signing);
       final signed = await _mwaClient.signTransaction(transactionBytes: txBytes);
-      if (signed == null) { print('PaymentService: MWA returned null signed transaction'); throw Exception('User rejected the request'); }
+      if (signed == null) { throw Exception('User rejected the request'); }
 
-      // Use web3.base58Encode to convert the first signature (Uint8List) to string
       final signature = web3.base58Encode(web3.Transaction.deserialize(signed).signatures.first);
 
       if (offlineReady) {
-        // Store for later
         await _pendingManager.add(PendingTransaction(
           signature: signature,
           signedTxBase64: base64Encode(signed),
@@ -219,7 +261,7 @@ class PaymentService extends StateNotifier<PaymentState> {
           recipient: requests.length == 1 ? requests.first.recipient : null,
           amount: requests.length == 1 ? requests.first.amount : null,
         ));
-        _ref.read(pendingTransactionsProvider.notifier).load(); // NOTIFY
+        _ref.read(pendingTransactionsProvider.notifier).load();
         state = state.copyWith(status: PaymentStatus.success, signature: signature, isOfflineReady: true);
         onSuccess?.call();
         return signature;
@@ -235,16 +277,14 @@ class PaymentService extends StateNotifier<PaymentState> {
       state = state.copyWith(status: PaymentStatus.success);
       onSuccess?.call();
       return signature;
-    } catch (e, st) { print('PaymentService Error: $e'); print(st);
+    } catch (e, st) {
+      print('PaymentService Error: $e');
+      print(st);
       state = state.copyWith(status: PaymentStatus.failed, error: e.toString());
       return null;
     }
   }
 
-  /// Attempts to submit all locally queued pending transactions to the network.
-  ///
-  /// Removes successfully submitted transactions and those already present
-  /// on-chain. Updates the error field for transactions that fail for other reasons.
   Future<void> submitPendingTransactions() async {
     final pending = await _pendingManager.getAll();
     if (pending.isEmpty) return;
@@ -252,29 +292,22 @@ class PaymentService extends StateNotifier<PaymentState> {
     bool anyChange = false;
     for (final tx in pending) {
       if (tx.error != null && tx.error!.contains('Blockhash not found')) {
-        continue; // Don't spam RPC if we know it's dead, let user retry manually
+        continue;
       }
 
       try {
-        print('SeekerPay: Attempting to submit pending tx ${tx.signature}');
         final bytes = base64Decode(tx.signedTxBase64);
         await _rpcClient.sendTransaction(bytes);
-        
-        print('SeekerPay: Successfully submitted pending tx ${tx.signature}');
         await _pendingManager.remove(tx.signature);
         anyChange = true;
-      } catch (e, st) { print('PaymentService Error: $e'); print(st);
+      } catch (e) {
         final errorStr = e.toString();
-        print('SeekerPay: Failed to submit pending tx ${tx.signature}: $errorStr');
-        
         if (errorStr.contains('already processed') || 
             errorStr.contains('AlreadyProcessed') ||
             errorStr.contains('already exists')) {
-          print('SeekerPay: Tx ${tx.signature} already exists on-chain/mempool, removing from queue.');
           await _pendingManager.remove(tx.signature);
           anyChange = true;
         } else {
-          // Update transaction with error so user can see it in Offline screen
           await _pendingManager.update(PendingTransaction(
             signature: tx.signature,
             signedTxBase64: tx.signedTxBase64,
@@ -289,10 +322,9 @@ class PaymentService extends StateNotifier<PaymentState> {
       }
     }
     if (anyChange) {
-      _ref.read(pendingTransactionsProvider.notifier).load(); // NOTIFY
+      _ref.read(pendingTransactionsProvider.notifier).load();
     }
   }
 
-  /// Resets payment state back to [PaymentStatus.idle].
   void reset() { state = PaymentState(); }
 }

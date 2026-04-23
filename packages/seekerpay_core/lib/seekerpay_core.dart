@@ -4,6 +4,8 @@ export 'src/mwa_client.dart';
 export 'src/wallet_state.dart';
 export 'src/rpc_client.dart';
 export 'src/skr_token.dart';
+export 'src/payment_token.dart';
+export 'src/sol_transfer.dart';
 export 'src/balance_providers.dart';
 export 'src/confirmation_poller.dart';
 export 'src/payment_service.dart';

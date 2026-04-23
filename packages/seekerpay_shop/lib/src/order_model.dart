@@ -1,4 +1,5 @@
 import 'product_model.dart';
+import 'dart:math' as math;
 
 class OrderItem {
   final Product product;
@@ -63,9 +64,16 @@ class Order {
   /// Convert total to SKR base units (6 decimals).
   /// [skrPerUsd] — current USD price of 1 SKR (e.g. 0.02026).
   BigInt toSkrBaseUnits(double skrPerUsd) {
-    if (skrPerUsd <= 0) return BigInt.zero;
-    final skrAmount = totalUsd / skrPerUsd;
-    return BigInt.from((skrAmount * 1000000).round());
+    return toTokenBaseUnits(tokenPriceUsd: skrPerUsd, decimals: 6);
+  }
+
+  /// Convert total to token base units.
+  /// [tokenPriceUsd] — current USD price of 1 unit of the token.
+  /// [decimals] — number of decimal places for the token.
+  BigInt toTokenBaseUnits({required double tokenPriceUsd, required int decimals}) {
+    if (tokenPriceUsd <= 0) return BigInt.zero;
+    final amount = totalUsd / tokenPriceUsd;
+    return BigInt.from((amount * math.pow(10, decimals)).round());
   }
 
   Order copyWith({String? id, DateTime? timestamp, List<OrderItem>? items, String? signature, double? discountUsd}) =>
