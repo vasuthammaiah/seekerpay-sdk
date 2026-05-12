@@ -1,3 +1,11 @@
+## 1.4.0
+
+* Add `LoyaltyNftService`: persistent per-merchant SPL mint, `customerHasLoyaltyPass`, and `mintLoyaltyNft` for on-chain loyalty pass issuance.
+* Add `loyaltyNftServiceProvider` Riverpod provider.
+* Add `RpcClient.getMinimumBalanceForRentExemption` for rent calculation.
+* Add `token` field to `PendingTransaction` with SOL balance guard before retry.
+* Fix `PaymentService`: propagate `PaymentToken` when storing pending transactions.
+
 ## 1.3.0
 
 * Add native SOL payment support and multi-token utilities.

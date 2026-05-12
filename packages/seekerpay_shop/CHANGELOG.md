@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+* Add tax support to `Order`: `taxRate`, `country`, `taxUsd`, `taxLabel` (auto-detects GST/VAT/TAX by country).
+* Add inventory tracking to `Product`: `stockLevel`, `lowStockThreshold`, `isLowStock`, `isOutOfStock`.
+* Add `OrderNotifier.setTaxRate` and `setCountry`; all mutating methods are now async with an init-completion guard.
+* Add `HistoryNotifier.decrementStock` to reduce stock levels after a completed order.
+* Add loyalty check to `OrderCartSheet`: scan customer wallet QR → `LoyaltyNftService.customerHasLoyaltyPass` → auto-apply discount. Accepts `loyaltyEnabled`, `loyaltyDiscountPct`, and `merchantAddress` params.
+* Add `ProductScanStatus.idle` and `ProductScanNotifier.startScanning()` to prevent scans during sheet initialisation.
+* Fix Irys upload: switch from signature type 4 (Solana) to type 2 (Ed25519 generic) and add `uploader.irys.xyz` + `turbo.ardrive.io` as upload endpoints.
+
 ## 1.1.0
 
 * Add native SOL payment support and multi-token utilities.
