@@ -4,14 +4,13 @@ import 'product_providers.dart';
 
 class ProductScanNotifier extends Notifier<ProductScanState> {
   @override
-  ProductScanState build() => const ProductScanState.scanning();
+  ProductScanState build() => const ProductScanState.idle();
 
   Future<void> onBarcodeDetected(String barcode) async {
-    if (state.status != ProductScanStatus.scanning) return;
+    if (state.status != ProductScanStatus.idle && state.status != ProductScanStatus.scanning) return;
 
     state = ProductScanState.loading(barcode);
 
-    // 1. Check local catalog first
     final catalog = ref.read(productCatalogServiceProvider);
     final local = await catalog.get(barcode);
     if (local != null) {
@@ -19,7 +18,6 @@ class ProductScanNotifier extends Notifier<ProductScanState> {
       return;
     }
 
-    // 2. Hit Open Food Facts / Open Beauty Facts
     final lookup = ref.read(productLookupServiceProvider);
     final product = await lookup.lookup(barcode);
 
@@ -30,7 +28,8 @@ class ProductScanNotifier extends Notifier<ProductScanState> {
     }
   }
 
-  void reset() => state = const ProductScanState.scanning();
+  void startScanning() => state = const ProductScanState.scanning();
+  void reset() => state = const ProductScanState.idle();
 }
 
 final productScanProvider =

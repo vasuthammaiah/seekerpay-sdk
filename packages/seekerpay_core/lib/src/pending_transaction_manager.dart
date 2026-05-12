@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'payment_token.dart';
 
 /// A signed transaction that has been stored locally for deferred on-chain submission.
 class PendingTransaction {
@@ -18,8 +19,11 @@ class PendingTransaction {
   /// Base58 recipient address for single-transfer transactions, if known.
   final String? recipient;
 
-  /// Transfer amount in SKR base units, if known.
+  /// Transfer amount in base units (lamports for SOL, 10^-6 for SKR), if known.
   final BigInt? amount;
+
+  /// The token involved in this transaction.
+  final PaymentToken token;
 
   /// Last submission error message, populated by [PendingTransactionManager.update].
   final String? error;
@@ -31,6 +35,7 @@ class PendingTransaction {
     this.label,
     this.recipient,
     this.amount,
+    this.token = PaymentToken.skr,
     this.error,
   });
 
@@ -42,6 +47,7 @@ class PendingTransaction {
     'label': label,
     'recipient': recipient,
     'amount': amount?.toString(),
+    'token': token.name,
     'error': error,
   };
 
@@ -53,6 +59,7 @@ class PendingTransaction {
     label: json['label'],
     recipient: json['recipient'],
     amount: json['amount'] != null ? BigInt.parse(json['amount']) : null,
+    token: PaymentToken.values.firstWhere((e) => e.name == (json['token'] ?? 'skr'), orElse: () => PaymentToken.skr),
     error: json['error'],
   );
 }

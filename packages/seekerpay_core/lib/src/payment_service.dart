@@ -178,7 +178,7 @@ class PaymentService extends StateNotifier<PaymentState> {
           }
         }
       } catch (e) {
-        if (!offlineReady) rethrow;
+        if (e.toString().contains("insufficient balance")) rethrow; if (!offlineReady) rethrow;
       }
 
       final blockhash = await _rpcClient.getLatestBlockhash().catchError((e) {
@@ -260,6 +260,7 @@ class PaymentService extends StateNotifier<PaymentState> {
           label: requests.length > 1 ? 'Multi-Pay' : requests.first.label,
           recipient: requests.length == 1 ? requests.first.recipient : null,
           amount: requests.length == 1 ? requests.first.amount : null,
+          token: token,
         ));
         _ref.read(pendingTransactionsProvider.notifier).load();
         state = state.copyWith(status: PaymentStatus.success, signature: signature, isOfflineReady: true);
@@ -291,6 +292,26 @@ class PaymentService extends StateNotifier<PaymentState> {
 
     bool anyChange = false;
     for (final tx in pending) {
+      if (tx.token == PaymentToken.sol && tx.amount != null) { 
+        try { 
+          final balance = await _rpcClient.getBalance(_payerAddress); 
+          const reserve = 2000000; 
+          if (balance < (tx.amount! + BigInt.from(reserve))) { 
+            await _pendingManager.update(PendingTransaction( 
+              signature: tx.signature, 
+              signedTxBase64: tx.signedTxBase64, 
+              createdAt: tx.createdAt, 
+              label: tx.label, 
+              recipient: tx.recipient, 
+              amount: tx.amount, 
+              token: tx.token, 
+              error: "Insufficient SOL balance (need 0.002 SOL reserve)", 
+            )); 
+            anyChange = true; 
+            continue; 
+          } 
+        } catch (_) {} 
+      }
       if (tx.error != null && tx.error!.contains('Blockhash not found')) {
         continue;
       }
@@ -315,6 +336,7 @@ class PaymentService extends StateNotifier<PaymentState> {
             label: tx.label,
             recipient: tx.recipient,
             amount: tx.amount,
+            token: tx.token,
             error: errorStr,
           ));
           anyChange = true;

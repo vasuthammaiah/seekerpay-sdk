@@ -30,9 +30,10 @@ class IrysClient {
   static const _prefSignPriv = 'skr_chat_irys_sign_priv';
   static const _prefSignPub = 'skr_chat_irys_sign_pub';
 
-  /// Irys nodes that accept Solana / Ed25519 signed data items.
-  static const _node1Url = 'https://node1.irys.xyz';
-  static const _node2Url = 'https://node2.irys.xyz';
+  static const _uploaderUrl = 'https://uploader.irys.xyz';
+  static const _turboUrl   = 'https://turbo.ardrive.io';
+  static const _node1Url   = 'https://node1.irys.xyz';
+  static const _node2Url   = 'https://node2.irys.xyz';
 
   static final _ed25519 = Ed25519();
 
@@ -77,6 +78,8 @@ class IrysClient {
     final dataItem = await _buildDataItem(data, tags);
 
     final uploadUrls = [
+      '$_uploaderUrl/tx/solana',
+      '$_turboUrl/tx',
       '$_node1Url/tx/solana',
       '$_node2Url/tx/solana',
     ];
@@ -110,26 +113,9 @@ class IrysClient {
         return txId;
       }
 
-      // 429 (rate limit): try next node.
-      if (response.statusCode == 429) {
-        lastError = IrysUploadException(
-          'Irys rate limited at $url (429): ${response.body}',
-          response.statusCode,
-        );
-        continue;
-      }
-
-      // Other 4xx = client/format error — stop.
-      if (response.statusCode >= 400 && response.statusCode < 500) {
-        throw IrysUploadException(
-          'Irys rejected upload at $url (${response.statusCode}): ${response.body}',
-          response.statusCode,
-        );
-      }
-
-      // 5xx = server error — try next node.
+      // Any error — try next node.
       lastError = IrysUploadException(
-        'Irys server error (${response.statusCode}): ${response.body}',
+        'Irys error at $url (${response.statusCode}): ${response.body}',
         response.statusCode,
       );
     }
@@ -142,7 +128,9 @@ class IrysClient {
   // ---------------------------------------------------------------------------
 
   Future<Uint8List> _buildDataItem(Uint8List data, List<IrysTag> tags) async {
-    const sigType = 4;
+    // Signature type 2 = generic Ed25519 (64-byte sig + 32-byte owner).
+    // Type 4 (Solana) is no longer accepted by Irys/Turbo nodes.
+    const sigType = 2;
     final tagsAvro = _encodeTagsAvro(tags);
 
     final signingData = _deepHash([
@@ -156,11 +144,7 @@ class IrysClient {
       data,
     ]);
 
-    // THE CRITICAL FIX: The Irys SDK for Solana signs the HEX STRING ASCII BYTES 
-    // of the deepHash, not the raw bytes.
-    final signingDataHex = utf8.encode(_bytesToHex(signingData));
-
-    final sig = await _ed25519.sign(signingDataHex, keyPair: _signingKeyPair);
+    final sig = await _ed25519.sign(signingData, keyPair: _signingKeyPair);
     final sigBytes = Uint8List.fromList(sig.bytes);
 
     final builder = BytesBuilder();
@@ -243,10 +227,6 @@ class IrysClient {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
-
-  static String _bytesToHex(Uint8List bytes) {
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  }
 
   static Uint8List _uint16LE(int value) {
     return Uint8List(2)

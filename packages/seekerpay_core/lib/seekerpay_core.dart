@@ -16,3 +16,4 @@ export 'src/transaction_record.dart';
 export 'src/transaction_parser.dart';
 export 'src/activity_service.dart';
 export 'src/pending_transaction_manager.dart';
+export 'src/loyalty_nft_service.dart';

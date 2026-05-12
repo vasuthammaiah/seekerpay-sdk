@@ -1,6 +1,6 @@
 import 'product_model.dart';
 
-enum ProductScanStatus { scanning, loading, found, notFound }
+enum ProductScanStatus { idle, scanning, loading, found, notFound }
 
 class ProductScanState {
   final ProductScanStatus status;
@@ -12,6 +12,11 @@ class ProductScanState {
     this.barcode,
     this.product,
   });
+
+  const ProductScanState.idle()
+      : status = ProductScanStatus.idle,
+        barcode = null,
+        product = null;
 
   const ProductScanState.scanning()
       : status = ProductScanStatus.scanning,

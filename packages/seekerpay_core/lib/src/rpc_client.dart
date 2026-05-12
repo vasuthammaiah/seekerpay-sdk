@@ -113,6 +113,11 @@ class RpcClient {
   }
 
   /// Returns the SOL balance of [address] in lamports (confirmed commitment).
+  Future<BigInt> getMinimumBalanceForRentExemption(int space) async { 
+    final result = await _post("getMinimumBalanceForRentExemption", [space]); 
+    return BigInt.from(result); 
+  } 
+
   Future<BigInt> getBalance(String address) async {
     final result = await _post('getBalance', [address, {'commitment': 'confirmed'}]);
     return BigInt.from(result['value']);

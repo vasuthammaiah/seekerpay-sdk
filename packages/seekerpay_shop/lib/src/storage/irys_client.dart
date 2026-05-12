@@ -31,9 +31,10 @@ class IrysClient {
   static const _prefSignPriv = 'skr_shop_irys_sign_priv';
   static const _prefSignPub = 'skr_shop_irys_sign_pub';
 
-  /// Irys node that accepts Solana / Ed25519 signed data items.
-  static const _node1Url = 'https://node1.irys.xyz';
-  static const _node2Url = 'https://node2.irys.xyz';
+  static const _uploaderUrl = 'https://uploader.irys.xyz';
+  static const _turboUrl   = 'https://turbo.ardrive.io';
+  static const _node1Url   = 'https://node1.irys.xyz';
+  static const _node2Url   = 'https://node2.irys.xyz';
 
   static final _ed25519 = Ed25519();
 
@@ -54,19 +55,20 @@ class IrysClient {
     final pubB64 = prefs.getString(_prefSignPub);
 
     if (privB64 != null && pubB64 != null) {
-      debugPrint('[SKR-Irys] init: loaded existing Ed25519 keypair from prefs');
       final privBytes = base64.decode(privB64);
-      final pubBytes = base64.decode(pubB64);
-      final kp = SimpleKeyPairData(
-        privBytes,
-        publicKey: SimplePublicKey(pubBytes, type: KeyPairType.ed25519),
-        type: KeyPairType.ed25519,
-      );
-      return IrysClient._(
-        kp,
-        Uint8List.fromList(pubBytes),
-        Uint8List.fromList(privBytes),
-      );
+      // Re-derive the keypair from the seed — avoids SimpleKeyPairData's public-key mismatch.
+      final kp = await _ed25519.newKeyPairFromSeed(privBytes);
+      final pub = await kp.extractPublicKey();
+      final derivedPub = Uint8List.fromList(pub.bytes);
+      final storedPub = Uint8List.fromList(base64.decode(pubB64));
+      final match = _listEquals(derivedPub, storedPub);
+      debugPrint('[SKR-Irys] init: loaded keypair from prefs  privLen=${privBytes.length}  pubLen=${derivedPub.length}  pubMatchesStored=$match');
+      if (!match) {
+        // Stored public key is stale — overwrite it with the correctly-derived one.
+        debugPrint('[SKR-Irys] init: ⚠️ stored pubKey mismatch — updating prefs');
+        await prefs.setString(_prefSignPub, base64.encode(derivedPub));
+      }
+      return IrysClient._(kp, derivedPub, Uint8List.fromList(privBytes));
     }
 
     debugPrint('[SKR-Irys] init: generating new Ed25519 keypair (first run)');
@@ -97,6 +99,8 @@ class IrysClient {
     debugPrint('[SKR-Irys] upload: data item size=${dataItem.length} bytes');
 
     final uploadUrls = [
+      '$_uploaderUrl/tx/solana',
+      '$_turboUrl/tx',
       '$_node1Url/tx/solana',
       '$_node2Url/tx/solana',
     ];
@@ -147,16 +151,7 @@ class IrysClient {
         continue;
       }
 
-      // 400/401/403/422 = definite client/auth error — abort immediately.
-      if (response.statusCode >= 400 && response.statusCode < 500) {
-        debugPrint('[SKR-Irys] upload: ❌ client error ${response.statusCode} at $url — aborting  body=${response.body}');
-        throw IrysUploadException(
-          'Irys rejected upload at $url (${response.statusCode}): ${response.body}',
-          response.statusCode,
-        );
-      }
-
-      // 5xx — try next node.
+      // 4xx/5xx — try next node.
       debugPrint('[SKR-Irys] upload: ❌ ${response.statusCode} at $url — trying next node  body=${response.body}');
       lastError = IrysUploadException(
         'Irys error at $url (${response.statusCode}): ${response.body}',
@@ -173,8 +168,9 @@ class IrysClient {
   // ---------------------------------------------------------------------------
 
   Future<Uint8List> _buildDataItem(Uint8List data, List<IrysTag> tags) async {
-    // Signature type 4 = Solana/Ed25519 (64-byte sig + 32-byte owner).
-    const sigType = 4;
+    // Signature type 2 = generic Ed25519 (64-byte sig + 32-byte owner).
+    // Type 4 (Solana) is no longer accepted by Irys/Turbo nodes.
+    const sigType = 2;
     final tagsAvro = _encodeTagsAvro(tags);
 
     final signingData = _deepHash([
@@ -188,11 +184,7 @@ class IrysClient {
       data,
     ]);
 
-    // THE CRITICAL FIX: The Irys SDK for Solana signs the HEX STRING ASCII BYTES 
-    // of the deepHash, not the raw bytes.
-    final signingDataHex = utf8.encode(_bytesToHex(signingData));
-
-    final sig = await _ed25519.sign(signingDataHex, keyPair: _signingKeyPair);
+    final sig = await _ed25519.sign(signingData, keyPair: _signingKeyPair);
     final sigBytes = Uint8List.fromList(sig.bytes);
 
     final builder = BytesBuilder();
@@ -221,7 +213,6 @@ class IrysClient {
       final tag = utf8.encode('blob');
       final length = utf8.encode(bytes.length.toString());
       
-      // Arweave Deep Hash Leaf: sha384( sha384("blob" + len) + sha384(data) )
       final tagHash = pkg_crypto.sha384.convert([...tag, ...length]).bytes;
       final dataHash = pkg_crypto.sha384.convert(bytes).bytes;
       return Uint8List.fromList(
@@ -282,10 +273,6 @@ class IrysClient {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  static String _bytesToHex(Uint8List bytes) {
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  }
-
   static Uint8List _uint16LE(int value) {
     return Uint8List(2)
       ..[0] = value & 0xFF
@@ -300,6 +287,14 @@ class IrysClient {
       v >>= 8;
     }
     return result;
+  }
+
+  static bool _listEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }
 

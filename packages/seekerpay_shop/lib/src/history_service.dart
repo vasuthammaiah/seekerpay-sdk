@@ -282,6 +282,24 @@ class HistoryNotifier extends Notifier<HistoryState> {
     }
   }
 
+  Future<void> decrementStock(List<OrderItem> items) async { 
+    final nextProducts = List<Product>.from(state.scannedProducts); 
+    bool changed = false; 
+    for (final item in items) { 
+      final i = nextProducts.indexWhere((p) => p.barcode == item.product.barcode); 
+      if (i >= 0 && nextProducts[i].stockLevel != null) { 
+        final currentStock = nextProducts[i].stockLevel!; 
+        nextProducts[i] = nextProducts[i].copyWith(stockLevel: (currentStock - item.quantity).clamp(0, 999999)); 
+        await _catalogService.save(nextProducts[i]); 
+        changed = true; 
+      } 
+    } 
+    if (changed) { 
+      state = state.copyWith(scannedProducts: nextProducts); 
+      await _localService.saveHistory(state.toJson()); 
+    } 
+  } 
+
   Future<void> saveOrder(Order order, {String? walletAddress}) async {
     final nextOrders = state.orders.where((o) => o.id != order.id).toList();
     nextOrders.add(order);
@@ -308,13 +326,20 @@ class HistoryNotifier extends Notifier<HistoryState> {
   }
 
   void _backupToArweave(Order order, String walletAddress) {
+    debugPrint('[HistoryNotifier] _backupToArweave: orderId=${order.id} for wallet=$walletAddress');
     _getArweave(walletAddress).then((arweave) {
-      if (arweave == null) return;
-      arweave.saveOrder(order, walletAddress).then((txId) {
-        arweave.markSynced(order.id);
-        _loadSyncedIds().then((synced) => state = state.copyWith(syncedOrderIds: synced));
+      if (arweave == null) {
+        debugPrint('[HistoryNotifier] _backupToArweave: arweave service is null, skipping');
+        return;
+      }
+      arweave.saveOrder(order, walletAddress).then((txId) async {
+        debugPrint('[HistoryNotifier] _backupToArweave: successfully saved order=${order.id} txId=$txId');
+        await arweave.markSynced(order.id);
+        final synced = await _loadSyncedIds();
+        debugPrint('[HistoryNotifier] _backupToArweave: updated syncedIds set, count=${synced.length}');
+        state = state.copyWith(syncedOrderIds: synced);
       }).catchError((Object e) {
-        if (kDebugMode) debugPrint('[HistoryNotifier] Arweave backup failed for ${order.id}: $e');
+        debugPrint('[HistoryNotifier] _backupToArweave: ❌ Arweave backup failed for ${order.id}: $e');
       });
     });
   }

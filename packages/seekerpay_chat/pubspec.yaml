@@ -1,6 +1,6 @@
 name: seekerpay_chat
 description: End-to-end encrypted, on-chain (Arweave/Irys) chat for SeekerPay .skr identities.
-version: 1.1.0
+version: 1.1.1
 topics:
   - solana
   - chat

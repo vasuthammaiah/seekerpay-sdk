@@ -7,10 +7,11 @@ import 'package:seekerpay_core/seekerpay_core.dart';
 
 class OrderNotifier extends Notifier<Order> {
   static const _storageKey = 'spay_current_order';
+  Future<void>? _initFuture;
 
   @override
   Order build() {
-    _loadFromDisk();
+    _initFuture = _loadFromDisk();
     return Order(
       id: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
       timestamp: DateTime.now(),
@@ -35,7 +36,8 @@ class OrderNotifier extends Notifier<Order> {
     } catch (_) {}
   }
 
-  void addItem(Product product, double usdPrice) {
+  Future<void> addItem(Product product, double usdPrice) async {
+    await _initFuture;
     final items = List<OrderItem>.from(state.items);
     final existing = items.indexWhere((i) => i.product.barcode == product.barcode);
 
@@ -54,7 +56,8 @@ class OrderNotifier extends Notifier<Order> {
     _saveToDisk();
   }
 
-  void incrementQty(String barcode) {
+  Future<void> incrementQty(String barcode) async {
+    await _initFuture;
     final items = List<OrderItem>.from(state.items);
     final i = items.indexWhere((item) => item.product.barcode == barcode);
     if (i < 0) return;
@@ -63,7 +66,8 @@ class OrderNotifier extends Notifier<Order> {
     _saveToDisk();
   }
 
-  void decrementQty(String barcode) {
+  Future<void> decrementQty(String barcode) async {
+    await _initFuture;
     final items = List<OrderItem>.from(state.items);
     final i = items.indexWhere((item) => item.product.barcode == barcode);
     if (i < 0) return;
@@ -76,29 +80,46 @@ class OrderNotifier extends Notifier<Order> {
     _saveToDisk();
   }
 
-  void removeItem(String barcode) {
+  Future<void> removeItem(String barcode) async {
+    await _initFuture;
     state = state.copyWith(
       items: state.items.where((i) => i.product.barcode != barcode).toList(),
     );
     _saveToDisk();
   }
 
-  void setDiscount(double usd) {
+  Future<void> setDiscount(double usd) async {
+    await _initFuture;
     state = state.copyWith(discountUsd: usd.clamp(0.0, state.subtotalUsd));
     _saveToDisk();
   }
 
-  void setToken(PaymentToken token) {
+  Future<void> setTaxRate(double rate) async {
+    await _initFuture;
+    state = state.copyWith(taxRate: rate.clamp(0.0, 100.0));
+    _saveToDisk();
+  }
+
+  Future<void> setCountry(String country) async {
+    await _initFuture;
+    state = state.copyWith(country: country);
+    _saveToDisk();
+  }
+
+  Future<void> setToken(PaymentToken token) async {
+    await _initFuture;
     state = state.copyWith(token: token);
     _saveToDisk();
   }
 
-  void addSignature(String signature) {
+  Future<void> addSignature(String signature) async {
+    await _initFuture;
     state = state.copyWith(signature: signature);
     _saveToDisk();
   }
 
-  void clear() {
+  Future<void> clear() async {
+    await _initFuture;
     state = Order(
       id: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
       timestamp: DateTime.now(),
