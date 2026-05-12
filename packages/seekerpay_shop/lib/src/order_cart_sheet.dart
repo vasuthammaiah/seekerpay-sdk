@@ -74,7 +74,6 @@ class OrderCartSheet extends ConsumerStatefulWidget {
 class _OrderCartSheetState extends ConsumerState<OrderCartSheet> {
   final _scrollCtrl = ScrollController();
   _LoyaltyStatus _loyaltyStatus = _LoyaltyStatus.idle;
-  String? _scannedCustomerAddress;
 
   @override
   void dispose() {
@@ -94,7 +93,6 @@ class _OrderCartSheetState extends ConsumerState<OrderCartSheet> {
       builder: (_) => const _WalletScanDialog(),
     );
     if (address == null || address.isEmpty) return;
-    _scannedCustomerAddress = address;
     setState(() => _loyaltyStatus = _LoyaltyStatus.checking);
     try {
       final svc = ref.read(loyaltyNftServiceProvider);
