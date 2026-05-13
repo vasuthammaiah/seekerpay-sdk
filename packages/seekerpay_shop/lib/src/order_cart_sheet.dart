@@ -1,9 +1,6 @@
-import 'local_llm_service.dart';
-import 'mrp_ai_reader.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'mrp_scan_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:seekerpay_core/seekerpay_core.dart';
 import 'order_model.dart';
@@ -12,7 +9,6 @@ import 'product_scan_sheet.dart';
 import 'product_model.dart';
 import 'product_scan_notifier.dart';
 import 'product_scan_state.dart';
-import 'dart:math' as math;
 
 const _kPrimary = Color(0xFF00FFA3);
 
@@ -250,6 +246,11 @@ class _OrderCartSheetState extends ConsumerState<OrderCartSheet> {
                   tooltip: 'Scan barcode',
                 ),
                 IconButton(
+                  onPressed: () => _showLabelScanner(context),
+                  icon: const Icon(Icons.document_scanner_rounded, color: _kPrimary, size: 22),
+                  tooltip: 'Scan label',
+                ),
+                IconButton(
                   onPressed: () => _showAddItemManually(context),
                   icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white38, size: 22),
                   tooltip: 'Add item manually',
@@ -302,6 +303,16 @@ class _OrderCartSheetState extends ConsumerState<OrderCartSheet> {
 
   void _showScanner(BuildContext context) {
     ProductScanSheet.show(
+      context,
+      onConfirm: (product, priceUsd) {
+        ref.read(orderNotifierProvider.notifier).addItem(product, priceUsd);
+        ref.read(productScanProvider.notifier).reset();
+      },
+    );
+  }
+
+  void _showLabelScanner(BuildContext context) {
+    MrpScanSheet.show(
       context,
       onConfirm: (product, priceUsd) {
         ref.read(orderNotifierProvider.notifier).addItem(product, priceUsd);

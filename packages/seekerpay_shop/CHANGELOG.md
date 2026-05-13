@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+* Restore **Scan Label** button in `OrderCartSheet` header — taps `MrpScanSheet` (OCR + AI label reader) alongside the existing barcode scan button.
+
 ## 1.2.0
 
 * Add tax support to `Order`: `taxRate`, `country`, `taxUsd`, `taxLabel` (auto-detects GST/VAT/TAX by country).

@@ -1,6 +1,6 @@
 name: seekerpay_shop
 description: Product lookup, catalog, and shop utilities for SeekerPay.
-version: 1.2.0
+version: 1.2.1
 topics:
   - solana
   - payments
